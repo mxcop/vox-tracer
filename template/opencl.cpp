@@ -2,8 +2,6 @@
 // Get the latest version from: https://github.com/jbikker/tmpl8
 // IGAD/NHTV/BUAS/UU - Jacco Bikker - 2006-2023
 
-#include "precomp.h"
-
 using namespace std;
 
 // source file information
@@ -122,7 +120,7 @@ static cl_int getPlatformID( cl_platform_id* platform )
 	clPlatformIDs = (cl_platform_id*)malloc( num_platforms * sizeof( cl_platform_id ) );
 	error = clGetPlatformIDs( num_platforms, clPlatformIDs, NULL );
 	cl_uint deviceType[2] = { CL_DEVICE_TYPE_GPU, CL_DEVICE_TYPE_CPU };
-	char* deviceOrder[2][3] = { { "NVIDIA", "AMD", "" }, { "", "", "" } };
+	const char* deviceOrder[2][3] = { { "NVIDIA", "AMD", "" }, { "", "", "" } };
 	printf( "available OpenCL platforms:\n" );
 	for (cl_uint i = 0; i < num_platforms; ++i)
 	{

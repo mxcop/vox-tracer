@@ -1,5 +1,6 @@
 // Template, IGAD version 3
 // IGAD/NHTV/UU - Jacco Bikker - 2006-2022
+#pragma once
 
 // C++ headers
 #include <chrono>
@@ -12,6 +13,10 @@
 #include <algorithm>
 #include <assert.h>
 #include <io.h>
+
+// Custom headers (from Max)
+#include "types.h"
+#include "simd.h"
 
 // header for AVX, and every technology before it.
 // if your CPU does not support this (unlikely), include the appropriate header instead.
@@ -145,11 +150,11 @@ bool IsKeyDown( const uint key );
 struct Timer
 {
 	Timer() { reset(); }
+	/* Returns elapsed time in seconds! */
 	float elapsed() const
 	{
 		chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
-		chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - start);
-		return (float)time_span.count();
+		return (t2 - start).count() * 1e-9f;
 	}
 	void reset() { start = chrono::high_resolution_clock::now(); }
 	chrono::high_resolution_clock::time_point start;
@@ -323,7 +328,7 @@ public:
 // helper function for conversion of f32 colors to int
 inline uint RGBF32_to_RGB8( const float4* v )
 {
-#ifdef _MSC_VER_
+#ifdef _MSC_VER
 	// based on https://stackoverflow.com/q/29856006
 	static __m128 s4 = _mm_set1_ps( 255.0f );
 	__m128 a = _mm_load_ps( (const float*)v );
@@ -343,10 +348,10 @@ inline uint RGBF32_to_RGB8( const float4* v )
 class TheApp
 {
 public:
-	virtual void Init() { /* defined empty so we can omit it from the renderer */ }
-	virtual void Tick( float deltaTime ) = 0;
-	virtual void UI() { uiUpdated = false; }
-	virtual void Shutdown() { /* defined empty so we can omit it from the renderer */ }
+	virtual void init() { /* defined empty so we can omit it from the renderer */ }
+	virtual void tick( f32 dt ) = 0;
+	virtual void gui( f32 dt ) { uiUpdated = false; }
+	virtual void shutdown() { /* defined empty so we can omit it from the renderer */ }
 	virtual void MouseUp( int button ) { /* defined empty so we can omit it from the renderer */ }
 	virtual void MouseDown( int button ) { /* defined empty so we can omit it from the renderer */ }
 	virtual void MouseMove( int x, int y ) { /* defined empty so we can omit it from the renderer */ }
@@ -366,8 +371,6 @@ public:
 	void Tick() {}
 };
 
-#include "scene.h"
-#include "camera.h"
 #include "renderer.h"
 
 // EOF

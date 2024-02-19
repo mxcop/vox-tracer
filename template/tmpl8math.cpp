@@ -5,8 +5,6 @@
 // In this file: implementation of various functions of the template
 // math library defined in tmpl8math.h.
 
-#include "precomp.h"
-
 // random number generator - Marsaglia's xor32
 // This is a high-quality RNG that uses a single 32-bit seed. More info:
 // https://www.researchgate.net/publication/5142825_Xorshift_RNGs

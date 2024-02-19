@@ -2,8 +2,6 @@
 // Get the latest version from: https://github.com/jbikker/tmpl8
 // IGAD/NHTV/BUAS/UU - Jacco Bikker - 2006-2023
 
-#include "precomp.h"
-
 extern bool IGP_detected;
 
 // OpenGL helper functions

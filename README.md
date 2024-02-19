@@ -1,5 +1,8 @@
-This template is intended for students of Breda University.
+# Voxel Software Ray Tracer
 
-Code is fully public domain. Use as you please.
+## License (CC0 & MIT)
+All code apart from the code forked is MIT licensed.
 
-Contact me at bikker.j@gmail.com.
+*This project is build upon a template created by Jacco Bikker (bikker.j@gmail.com)*
+
+*Code as is from the template I forked is fully public domain. Use as you please.*

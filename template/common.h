@@ -1,10 +1,21 @@
 // Template, IGAD version 3
 // IGAD/NHTV/UU - Jacco Bikker - 2006-2022
+#pragma once
 
-// common.h is to be included in host and device code and stores
-// global settings and defines.
+/* Settings */
+#if 1
+constexpr u32 WIN_WIDTH = 1280;
+constexpr u32 WIN_HEIGHT = 720;
+#else
+constexpr u32 WIN_WIDTH = 1920;
+constexpr u32 WIN_HEIGHT = 1080;
+#endif
 
-// constants
+/* Inline functions */
+static inline f32 _min(const f32 a, const f32 b) { return a < b ? a : b; };
+static inline f32 _max(const f32 a, const f32 b) { return a > b ? a : b; };
+
+/* Some constants */
 #define PI		3.14159265358979323846264f
 #define INVPI		0.31830988618379067153777f
 #define INV2PI		0.15915494309189533576888f

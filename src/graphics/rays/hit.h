@@ -1,0 +1,13 @@
+#pragma once
+
+/* Holds information about a ray hit. */
+struct HitInfo {
+    f32 depth = BIG_F32;
+    u32 steps = 0; /* For debugging! */
+};
+
+struct PacketHitInfo {
+    f128 depth;
+    f128 exit_t;
+    u32 steps = 0; /* For debugging! */
+};

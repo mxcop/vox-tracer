@@ -2,8 +2,6 @@
 // Get the latest version from: https://github.com/jbikker/tmpl8
 // IGAD/NHTV/BUAS/UU - Jacco Bikker - 2006-2023
 
-#include "precomp.h"
-
 #pragma comment( linker, "/subsystem:windows /ENTRY:mainCRTStartup" )
 
 using namespace Tmpl8;
@@ -94,12 +92,12 @@ void main()
 	glfwWindowHint( GLFW_STENCIL_BITS, GL_FALSE );
 	glfwWindowHint( GLFW_RESIZABLE, GL_FALSE /* easier :) */ );
 #ifdef FULLSCREEN
-	window = glfwCreateWindow( SCRWIDTH, SCRHEIGHT, "Tmpl8RT", glfwGetPrimaryMonitor(), 0 );
+	window = glfwCreateWindow( WIN_WIDTH, WIN_HEIGHT, "Tmpl8RT", glfwGetPrimaryMonitor(), 0 );
 #else
 #ifdef DOUBLESIZE
-	window = glfwCreateWindow( SCRWIDTH * 2, SCRHEIGHT * 2, "Tmpl8RT", 0, 0 );
+	window = glfwCreateWindow( WIN_WIDTH * 2, WIN_HEIGHT * 2, "Tmpl8RT", 0, 0 );
 #else
-	window = glfwCreateWindow( SCRWIDTH, SCRHEIGHT, "Tmpl8RT", 0, 0 );
+	window = glfwCreateWindow( WIN_WIDTH, WIN_HEIGHT, "Tmpl8RT", 0, 0 );
 #endif
 #endif
 	if (!window) FatalError( "glfwCreateWindow failed." );
@@ -119,7 +117,7 @@ void main()
 	glDisable( GL_DEPTH_TEST );
 	glDisable( GL_CULL_FACE );
 	glDisable( GL_BLEND );
-	glViewport( 0, 0, SCRWIDTH, SCRHEIGHT );
+	glViewport( 0, 0, WIN_WIDTH, WIN_HEIGHT );
 	CheckGL();
 	char* vendor = (char*)glGetString( GL_VENDOR );
 	char* renderer = (char*)glGetString( GL_RENDERER );
@@ -140,8 +138,8 @@ void main()
 	glfwShowWindow( window );
 #endif
 	// initialize application
-	InitRenderTarget( SCRWIDTH, SCRHEIGHT );
-	Surface* screen = new Surface( SCRWIDTH, SCRHEIGHT );
+	InitRenderTarget( WIN_WIDTH, WIN_HEIGHT );
+	Surface* screen = new Surface( WIN_WIDTH, WIN_HEIGHT );
 	app = new Renderer();
 #if 0
 	// deserizalize
@@ -169,7 +167,7 @@ void main()
 #endif
 	// finalize app
 	app->screen = screen;
-	app->Init();
+	app->init();
 	// prep imgui
 	ImGui::CreateContext();
 	ImGui_ImplGlfw_InitForOpenGL( window, true );
@@ -308,9 +306,9 @@ void main()
 	static Timer timer;
 	while (!glfwWindowShouldClose( window ))
 	{
-		deltaTime = min( 500.0f, 1000.0f * timer.elapsed() );
+		deltaTime = timer.elapsed();
 		timer.reset();
-		app->Tick( deltaTime );
+		app->tick( deltaTime );
 		// send the rendering result to the screen using OpenGL
 		if (frameNr++ > 1)
 		{
@@ -325,7 +323,7 @@ void main()
 			ImGui_ImplGlfw_NewFrame();
 			ImGui::NewFrame();
 			app->uiUpdated = true;
-			app->UI(); // app->uiUpdated will be false if Render::UI() was not implemented
+			app->gui(deltaTime); // app->uiUpdated will be false if Render::UI() was not implemented
 			if (app->uiUpdated)
 			{
 				ImGui::Render();
@@ -353,7 +351,7 @@ void main()
 	fclose( f );
 #endif
 	// close down
-	app->Shutdown();
+	app->shutdown();
 	Kernel::KillCL();
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();

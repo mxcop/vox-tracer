@@ -103,7 +103,8 @@ struct ALIGN( 16 ) float4
 struct float3
 {
 	float3() = default;
-	float3( const float a, const float b, const float c ) : x( a ), y( b ), z( c ) {}
+    // float3(const float a, const float b, const float c) : x(a), y(b), z(c) {}
+    constexpr float3(const float a, const float b, const float c) : x(a), y(b), z(c) {}
 	float3( const float a ) : x( a ), y( a ), z( a ) {}
 	float3( const float4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
 	float3( const uint3 a ) : x( (float)a.x ), y( (float)a.y ), z( (float)a.z ) {}
@@ -111,7 +112,11 @@ struct float3
 	float2 xy() { return float2( x, y ); }
 	float2 yz() { return float2( y, z ); }
 	union { struct { float x, y, z; }; float cell[3]; };
-	float& operator [] ( const int n ) { return cell[n]; }
+	//float& operator [] ( const int n ) { return cell[n]; }
+    float& operator[](const int n) { return cell[n]; }
+    float& operator[](const unsigned int n) { return cell[n]; }
+    const float& operator[](const int n) const { return cell[n]; }
+    const float& operator[](const unsigned int n) const { return cell[n]; }
 };
 struct ALIGN( 4 ) uchar4
 {
@@ -526,6 +531,9 @@ inline uint dominantAxis( const float3& v ) { float x = fabs( v.x ), y = fabs( v
 inline float2 floorf( const float2& v ) { return make_float2( floorf( v.x ), floorf( v.y ) ); }
 inline float3 floorf( const float3& v ) { return make_float3( floorf( v.x ), floorf( v.y ), floorf( v.z ) ); }
 inline float4 floorf( const float4& v ) { return make_float4( floorf( v.x ), floorf( v.y ), floorf( v.z ), floorf( v.w ) ); }
+
+inline int3 floori(const float3& v) { return make_int3(floorf(v.x), floorf(v.y), floorf(v.z)); }
+inline uint3 flooru(const float3& v) { return make_uint3(floorf(v.x), floorf(v.y), floorf(v.z)); }
 
 inline float2 ceilf( const float2& v ) { return make_float2( ceilf( v.x ), ceilf( v.y ) ); }
 inline float3 ceilf( const float3& v ) { return make_float3( ceilf( v.x ), ceilf( v.y ), ceilf( v.z ) ); }
