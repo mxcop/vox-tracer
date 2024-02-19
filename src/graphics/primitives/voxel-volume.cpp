@@ -29,11 +29,14 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
 
     u32 i = 0;
     f32 t = 0.0f;
+    float3 normal = {};
     for (; i < MAX_STEPS; ++i) {
         /* Fetch the current voxel */
         u8 voxel = fetch_voxel(idx, size);
         if (voxel != 0x00) {
             hit.depth += t / scale;
+            hit.normal = -normal * step;
+            hit.albedo = float3((f32)voxel / 256.0f);
             hit.steps = i;
             return hit;
         }
@@ -45,12 +48,14 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
                 ray_pos.x += step.x;
                 idx.x += step.x;
                 if (idx.x < 0 || idx.x >= size.x) break;
+                normal = float3(1, 0, 0);
                 t = tmax.x;
                 tmax.x += delta.x;
             } else {
                 ray_pos.z += step.z;
                 idx.z += step.z;
                 if (idx.z < 0 || idx.z >= size.z) break;
+                normal = float3(0, 0, 1);
                 t = tmax.z;
                 tmax.z += delta.z;
             }
@@ -59,12 +64,14 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
                 ray_pos.y += step.y;
                 idx.y += step.y;
                 if (idx.y < 0 || idx.y >= size.y) break;
+                normal = float3(0, 1, 0);
                 t = tmax.y;
                 tmax.y += delta.y;
             } else {
                 ray_pos.z += step.z;
                 idx.z += step.z;
                 if (idx.z < 0 || idx.z >= size.z) break;
+                normal = float3(0, 0, 1);
                 t = tmax.z;
                 tmax.z += delta.z;
             }
@@ -75,6 +82,64 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     hit.depth = BIG_F32;
     hit.steps = i;
     return hit;
+}
+
+bool VoxelVolume::is_occluded(const Ray& ray) const {
+    HitInfo hit = {};
+
+    /* Early return if bounding box was not hit */
+    hit.depth = ray_vs_aabb(ray);
+    if (hit.depth == BIG_F32) return false;
+
+    /* Calculate the size of the voxel volume in voxels */
+    const int3 size = floori(voxel_size);
+
+    /* Calculate the starting voxel index */
+    const float3 ray_pos = ((ray.origin + ray.dir * (hit.depth + 0.001f)) - bbmin) * scale;
+    int3 idx = floori(ray_pos);
+
+    /* Clamp the starting voxel index inside the voxel volume */
+    idx = clamp(idx, int3(0, 0, 0), size - 1);
+
+    /* Which direction each axis will step in -1 or 1 */
+    const float3 step = ray.sign_dir;
+    /* Indicates how far we must move (in units of t) to equal the width of a voxel */
+    const float3 delta = fabs(ray.r_dir);
+    /* Determine t at which the ray crosses the first voxel boundary */
+    float3 tmax = ((float3(idx) - ray_pos) + fmaxf(step, float3(0.0f))) * ray.r_dir;
+
+    for (u32 i = 0; i < MAX_STEPS; ++i) {
+        /* Fetch the current voxel */
+        u8 voxel = fetch_voxel(idx, size);
+        if (voxel != 0x00) {
+            return true;
+        }
+
+        /* Amanatides & Woo */
+        /* <http://www.cse.yorku.ca/~amana/research/grid.pdf> */
+        if (tmax.x < tmax.y) {
+            if (tmax.x < tmax.z) {
+                idx.x += step.x;
+                if (idx.x < 0 || idx.x >= size.x) break;
+                tmax.x += delta.x;
+            } else {
+                idx.z += step.z;
+                if (idx.z < 0 || idx.z >= size.z) break;
+                tmax.z += delta.z;
+            }
+        } else {
+            if (tmax.y < tmax.z) {
+                idx.y += step.y;
+                if (idx.y < 0 || idx.y >= size.y) break;
+                tmax.y += delta.y;
+            } else {
+                idx.z += step.z;
+                if (idx.z < 0 || idx.z >= size.z) break;
+                tmax.z += delta.z;
+            }
+        }
+    }
+    return false;
 }
 
 static __forceinline i128 normal_encode(const i128 x, const i128 y, const i128 z, const u32 sx,
@@ -200,7 +265,7 @@ PacketHitInfo VoxelVolume::intersect(const RayPacket& packet) const {
         const i128 exit_mask =
             _mm_or_epi32(_mm_cmpgt_epi32(indices, _mm_set1_epi32(voxels.size() - 1)),
                          _mm_cmplt_epi32(indices, _mm_set1_epi32(0)));
-        t = _mm_blendv_ps(t, BIG_F128, (f128&)exit_mask);
+        // t = _mm_blendv_ps(t, BIG_F128, (f128&)exit_mask);
         status_mask = _mm_or_epi32(status_mask, exit_mask);
 
         /* Early exit if all rays are done */
@@ -230,7 +295,8 @@ PacketHitInfo VoxelVolume::intersect(const RayPacket& packet) const {
         // const f128 tmin_z = _mm_and_ps(cmp_z, tmax_z);
         // const f128 tmin = _mm_or_ps(_mm_or_ps(tmin_x, tmin_y), tmin_z);
         const f128 tmin = _mm_min_ps(_mm_min_ps(tmax_x, tmax_y), tmax_z);
-        t = _mm_blendv_ps(tmin, t, (f128&)status_mask);
+        t = tmin;
+        // t = _mm_blendv_ps(tmin, t, (f128&)status_mask);
         // t = _mm_fmadd_ps(tmin, is, entry_t);
 
         /* Step to the next voxel index */

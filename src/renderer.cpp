@@ -16,12 +16,25 @@ u32 Renderer::trace(const Ray& ray) const {
     /* Skybox color if the ray missed */
     if (hit.depth == BIG_F32) return 0xFF101010;
 
+    /* Shoot a shadow ray */
+    const float3 light_dir = normalize(float3(0.5f, 0.2f, 0.8f));
+    const Ray shadow_ray = Ray(ray.origin + ray.dir * (hit.depth - 0.001f), light_dir);
+    bool in_shadow = volume->is_occluded(shadow_ray);
+
+    float4 en = float4(hit.albedo, 1.0f);
+    if (in_shadow) {
+        en *= 0.2f;
+    }
+    return RGBF32_to_RGB8(&en);
+
     /* Visualize the distance */
-    u32 cd = fminf(hit.depth / 4.0f, 1.0f) * 0xFF;
+    // u32 cd = fminf(hit.depth / 32.0f, 1.0f) * 0xFF;
     /* Visualize the step count */
     // u32 cd = (hit.steps / 256.0f) * 0xFF;
-    u32 color = (cd << 0) | (cd << 8) | (cd << 16) | 0xFF000000;
-    return color;
+    // u32 color = (cd << 0) | (cd << 8) | (cd << 16) | 0xFF000000;
+    // float4 en = float4(hit.albedo * dot(hit.normal, normalize(float3(0.5f, 0.5f, 0.5f))), 1.0f);
+    // u32 color = RGBF32_to_RGB8(&en);
+    // return color;
 }
 
 void Renderer::tick(f32 dt) {
@@ -42,7 +55,7 @@ void Renderer::tick(f32 dt) {
             }
         }
     }
-#elif 0
+#elif 1
 #pragma omp parallel for schedule(dynamic)
     for (i32 y = 0; y < WIN_HEIGHT; ++y) {
         for (i32 x = 0; x < WIN_WIDTH; ++x) {
@@ -77,15 +90,15 @@ void Renderer::tick(f32 dt) {
             for (u32 v = 0; v < 2; ++v) {
                 for (u32 u = 0; u < 2; ++u) {
                     const f32 depth = hit.depth.m128_f32[u + v * 2];
-                    if (depth == 0.0f) {
+                    /*if (depth == 0.0f) {
                         screen->pixels[(x + u) + (y + v) * WIN_WIDTH] = 0xFFFF1010;
                         continue;
-                    }
-                    /*if (depth >= BIG_F32) {
+                    }*/
+                    if (depth >= BIG_F32) {
                         screen->pixels[(x + u) + (y + v) * WIN_WIDTH] = 0xFF101010;
                         continue;
-                    }*/
-                    const u32 cd = fminf(depth / 4.0f, 1.0f) * 0xFF;
+                    }
+                    const u32 cd = fminf(depth / 32.0f, 1.0f) * 0xFF;
                     // const u32 cd = (hit.steps / 256.0f) * 0xFF;
                     const u32 color = (cd << 0) | (cd << 8) | (cd << 16) | 0xFF000000;
                     screen->pixels[(x + u) + (y + v) * WIN_WIDTH] = color;
