@@ -7,9 +7,9 @@
 constexpr f32 DEFAULT_VOXEL_SCALE = 16.0f;
 
 /* Use morton ordering for voxels (slightly faster) */
-#define USE_MORTON 1
+#define USE_MORTON 0
 /* Use the AVX2 gather instructions to load voxels (worse on my AMD CPU) */
-#define USE_AVX2_GATHER 0
+#define USE_AVX2_GATHER 1
 
 struct VoxelVolume {
     f32 scale = DEFAULT_VOXEL_SCALE;
@@ -63,12 +63,13 @@ struct VoxelVolume {
                 f32 fx = 0;
                 for (u32 x = 0; x < size.x; ++x, fx += rx) {
                     const f32 noise = noise3D(fx, fy, fz);
+                    const f32 noise2 = noise3D(fx + 0.33f, fy + 0.66f, fz + 0.99f);
 #if USE_MORTON
                     const u64 i = morton_encode(x, y, z);
 #else
                     const u64 i = (z * size.x * size.y) + (y * size.x) + x;
 #endif
-                    voxels[i] = noise > 0.09f ? (1 + rand() % 0xFF) : 0x00;
+                    voxels[i] = noise > 0.09f ? (noise2 * 0xFF) : 0x00;
                 }
             }
         }

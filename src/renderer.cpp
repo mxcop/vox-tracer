@@ -36,16 +36,18 @@ u32 Renderer::trace(const Ray& ray) const {
     float4 en = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
     //float4 en = float4(hit.albedo, 1.0f);
 
+    #if 0
     /* Shoot a shadow ray */
     //const float3 light_dir = normalize(float3(0.5f, 0.2f, 0.8f));
-    //const float3 shadow_pos = ray.origin + ray.dir * (hit.depth);
+    const float3 shadow_pos = ray.origin + ray.dir * (hit.depth);
     //if (dist_sq(test_light, shadow_pos) < 2.0f * 2.0f) {
-    //const Ray shadow_ray = Ray(shadow_pos, test_light - shadow_pos);
-    //bool in_shadow = volume->is_occluded(shadow_ray);
+    const Ray shadow_ray = Ray(shadow_pos, test_light - shadow_pos);
+    bool in_shadow = volume->is_occluded(shadow_ray);
 
-    //    if (in_shadow) {
-    //        en *= 0.2f;
-    //    }
+        if (in_shadow) {
+            en *= 0.2f;
+        }
+        #endif
     //} else {
     //    en *= 0.2f;
     //}
@@ -125,7 +127,7 @@ void Renderer::tick(f32 dt) {
                         screen->pixels[(x + u) + (y + v) * WIN_WIDTH] = 0xFF101010;
                         continue;
                     }
-                    const u32 cd = fminf(depth / 2.0f, 1.0f) * 0xFF;
+                    const u32 cd = fminf(depth / 32.0f, 1.0f) * 0xFF;
                     // const u32 cd = (hit.steps / 256.0f) * 0xFF;
                     const u32 color = (cd << 0) | (cd << 8) | (cd << 16) | 0xFF000000;
                     screen->pixels[(x + u) + (y + v) * WIN_WIDTH] = color;
