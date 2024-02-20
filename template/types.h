@@ -23,6 +23,7 @@ constexpr f32 EPSILON_F32 = std::numeric_limits<float>::epsilon();
 #include <xmmintrin.h>
 #include <immintrin.h>
 #include <smmintrin.h>
+#include <emmintrin.h>
 
 typedef __m256 f256;
 typedef __m256i i256;

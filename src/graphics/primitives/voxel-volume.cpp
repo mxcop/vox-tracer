@@ -122,20 +122,24 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
                 idx.x += step.x;
                 if (idx.x < 0 || idx.x >= size.x) break;
                 tmax.x += delta.x;
+                //if (tmax.x >= 1.0f) return false;
             } else {
                 idx.z += step.z;
                 if (idx.z < 0 || idx.z >= size.z) break;
                 tmax.z += delta.z;
+                //if (tmax.z >= 1.0f) return false;
             }
         } else {
             if (tmax.y < tmax.z) {
                 idx.y += step.y;
                 if (idx.y < 0 || idx.y >= size.y) break;
                 tmax.y += delta.y;
+                //if (tmax.y >= 1.0f) return false;
             } else {
                 idx.z += step.z;
                 if (idx.z < 0 || idx.z >= size.z) break;
                 tmax.z += delta.z;
+                //if (tmax.z >= 1.0f) return false;
             }
         }
     }
@@ -159,14 +163,14 @@ PacketHitInfo VoxelVolume::intersect(const RayPacket& packet) const {
 
     /* Early return if no rays hit the bounding box */
     ray4_vs_aabb(packet, hit);
-    const i32 miss_mask = _mm_movemask_ps(_mm_cmpeq_ps(hit.depth, BIG_F128));
-    if (miss_mask == 0b1111) return hit;
+    const f128 miss_mask = _mm_cmpeq_ps(hit.depth, BIG_F128);
+    if (_mm_movemask_ps(miss_mask) == 0b1111) return hit;
 
     /* Voxels per unit of space, and it's reciprocal */
     const f128 ms = _mm_set_ps1(scale), is = _mm_set_ps1(1.0f / scale);
 
     /* Determine the ray entry point into the volume */
-    const f128 entry_t = _mm_add_ps(hit.depth, _mm_set_ps1(0.00001f));
+    const f128 entry_t = _mm_add_ps(hit.depth, _mm_set_ps1(0.0000000001f));
     const f128 entry_x = _mm_fmadd_ps(packet.rd_x, entry_t, packet.ro_x);
     const f128 entry_y = _mm_fmadd_ps(packet.rd_y, entry_t, packet.ro_y);
     const f128 entry_z = _mm_fmadd_ps(packet.rd_z, entry_t, packet.ro_z);
@@ -212,10 +216,11 @@ PacketHitInfo VoxelVolume::intersect(const RayPacket& packet) const {
     f128 tmax_z = _mm_mul_ps(_mm_add_ps(next_z, offset_z), packet.ird_z);
 
     /* "t" at which the ray exits the volume */
-    const f128 exit_t = _mm_sub_ps(hit.exit_t, _mm_set_ps1(0.00001f));
+    // const f128 exit_t = _mm_sub_ps(hit.exit_t, _mm_set_ps1(0.00001f));
 
     /* Mask that tracks status of the rays (done = 0xFFFFFFFF) */
-    i128 status_mask = (i128&)_mm_cmpge_ps(hit.depth, BIG_F128);
+    i128 status_mask = (i128&)miss_mask;  // (i128&)_mm_cmpge_ps(hit.depth, BIG_F128);
+    i128 exit_mask = (i128&)miss_mask;
     constexpr u32 RAYS = 4;
 
     /* Make sure the next position of the rays are safe! */
@@ -231,7 +236,7 @@ PacketHitInfo VoxelVolume::intersect(const RayPacket& packet) const {
 
     /* Traverse */
     u32 s = 0;
-    f128 t = _mm_min_ps(_mm_min_ps(tmax_x, tmax_y), tmax_z);
+    f128 t = _mm_setzero_ps();
     for (; s < MAX_STEPS; ++s) {
         /* Mark rays outside the volume as done */
         // status_mask = _mm_or_epi32(status_mask, (i128&)_mm_cmpge_ps(t, exit_t));
@@ -262,15 +267,16 @@ PacketHitInfo VoxelVolume::intersect(const RayPacket& packet) const {
 #endif
 
         /* Mark any rays outside the volume as done */
-        const i128 exit_mask =
-            _mm_or_epi32(_mm_cmpgt_epi32(indices, _mm_set1_epi32(voxels.size() - 1)),
-                         _mm_cmplt_epi32(indices, _mm_set1_epi32(0)));
-        // t = _mm_blendv_ps(t, BIG_F128, (f128&)exit_mask);
+        exit_mask =
+            _mm_or_epi32(exit_mask, _mm_or_epi32(_mm_cmpgt_epi32(indices, _mm_set1_epi32(voxels.size() - 1)),
+                         _mm_cmplt_epi32(indices, _mm_set1_epi32(0))));
+        //t = _mm_blendv_ps(t, BIG_F128, (f128&)exit_mask);
         status_mask = _mm_or_epi32(status_mask, exit_mask);
 
         /* Early exit if all rays are done */
         if (_mm_movemask_ps((f128&)status_mask) == 0b1111) {
-            hit.depth = _mm_fmadd_ps(t, is, hit.depth);
+            // const f128 t = _mm_min_ps(_mm_min_ps(tmax_x, tmax_y), tmax_z);
+            hit.depth = _mm_blendv_ps(_mm_fmadd_ps(t, is, entry_t), BIG_F128, (f128&)exit_mask);
             break;
         }
 
@@ -285,9 +291,9 @@ PacketHitInfo VoxelVolume::intersect(const RayPacket& packet) const {
         const f128 min_zx = _mm_min_ps(tmax_z, tmax_x);
         const f128 min_xy = _mm_min_ps(tmax_x, tmax_y);
         /* And make a mask */
-        const f128 cmp_x = _mm_cmplt_ps(tmax_x, min_yz);
-        const f128 cmp_y = _mm_cmplt_ps(tmax_y, min_zx);
-        const f128 cmp_z = _mm_cmplt_ps(tmax_z, min_xy);
+        const f128 cmp_x = _mm_andnot_ps((f128&)status_mask, _mm_cmplt_ps(tmax_x, min_yz));
+        const f128 cmp_y = _mm_andnot_ps((f128&)status_mask, _mm_cmplt_ps(tmax_y, min_zx));
+        const f128 cmp_z = _mm_andnot_ps((f128&)status_mask, _mm_cmplt_ps(tmax_z, min_xy));
 
         /* Record the current "t" of each ray */
         // const f128 tmin_x = _mm_and_ps(cmp_x, tmax_x);
@@ -295,8 +301,8 @@ PacketHitInfo VoxelVolume::intersect(const RayPacket& packet) const {
         // const f128 tmin_z = _mm_and_ps(cmp_z, tmax_z);
         // const f128 tmin = _mm_or_ps(_mm_or_ps(tmin_x, tmin_y), tmin_z);
         const f128 tmin = _mm_min_ps(_mm_min_ps(tmax_x, tmax_y), tmax_z);
-        t = tmin;
-        // t = _mm_blendv_ps(tmin, t, (f128&)status_mask);
+        //t = tmin;
+        t = _mm_blendv_ps(tmin, t, (f128&)status_mask);
         // t = _mm_fmadd_ps(tmin, is, entry_t);
 
         /* Step to the next voxel index */

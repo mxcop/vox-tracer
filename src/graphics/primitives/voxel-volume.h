@@ -9,7 +9,7 @@ constexpr f32 DEFAULT_VOXEL_SCALE = 16.0f;
 /* Use morton ordering for voxels (slightly faster) */
 #define USE_MORTON 1
 /* Use the AVX2 gather instructions to load voxels (worse on my AMD CPU) */
-#define USE_AVX2_GATHER 1
+#define USE_AVX2_GATHER 0
 
 struct VoxelVolume {
     f32 scale = DEFAULT_VOXEL_SCALE;

@@ -23,4 +23,5 @@ class Renderer : public TheApp {
 
     unique_ptr<VoxelVolume> volume;
     Camera camera;
+    float3 test_light = {};
 };

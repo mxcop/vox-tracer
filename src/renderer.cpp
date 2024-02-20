@@ -6,8 +6,26 @@ void Renderer::init() {
         fclose(f);
     }
 
+    //i128 x = _mm_set_epi32(1, 1, 1, 1);
+    //i128 y = _mm_set_epi32(2, 2, 2, 2);
+    //i128 z = _mm_set_epi32(3, 3, 3, 3);
+
+    //i128 m = morton_encode(x, y, z);
+    //printf("morton: %i, %i, %i, %i\n", m.m128i_u32[0], m.m128i_u32[1], m.m128i_u32[2],
+    //       m.m128i_u32[3]);
+
     /* Create a voxel volume */
     volume = make_unique<VoxelVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
+}
+
+float dist_sq(float3 c, float3 p) {
+    float x1 = pow((p.x - c.x), 2);
+    float y1 = pow((p.y - c.y), 2);
+    float z1 = pow((p.z - c.z), 2);
+
+    // distance between the centre
+    // and given point
+    return (x1 + y1 + z1);
 }
 
 u32 Renderer::trace(const Ray& ray) const {
@@ -15,16 +33,22 @@ u32 Renderer::trace(const Ray& ray) const {
 
     /* Skybox color if the ray missed */
     if (hit.depth == BIG_F32) return 0xFF101010;
+    float4 en = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
+    //float4 en = float4(hit.albedo, 1.0f);
 
     /* Shoot a shadow ray */
-    const float3 light_dir = normalize(float3(0.5f, 0.2f, 0.8f));
-    const Ray shadow_ray = Ray(ray.origin + ray.dir * (hit.depth - 0.001f), light_dir);
-    bool in_shadow = volume->is_occluded(shadow_ray);
+    //const float3 light_dir = normalize(float3(0.5f, 0.2f, 0.8f));
+    //const float3 shadow_pos = ray.origin + ray.dir * (hit.depth);
+    //if (dist_sq(test_light, shadow_pos) < 2.0f * 2.0f) {
+    //const Ray shadow_ray = Ray(shadow_pos, test_light - shadow_pos);
+    //bool in_shadow = volume->is_occluded(shadow_ray);
 
-    float4 en = float4(hit.albedo, 1.0f);
-    if (in_shadow) {
-        en *= 0.2f;
-    }
+    //    if (in_shadow) {
+    //        en *= 0.2f;
+    //    }
+    //} else {
+    //    en *= 0.2f;
+    //}
     return RGBF32_to_RGB8(&en);
 
     /* Visualize the distance */
@@ -38,6 +62,9 @@ u32 Renderer::trace(const Ray& ray) const {
 }
 
 void Renderer::tick(f32 dt) {
+
+    if (IsKeyDown(GLFW_KEY_Q)) test_light = camera.pos;
+
     Timer t;
 
 #if 0
@@ -55,7 +82,7 @@ void Renderer::tick(f32 dt) {
             }
         }
     }
-#elif 1
+#elif 0
 #pragma omp parallel for schedule(dynamic)
     for (i32 y = 0; y < WIN_HEIGHT; ++y) {
         for (i32 x = 0; x < WIN_WIDTH; ++x) {
@@ -81,7 +108,7 @@ void Renderer::tick(f32 dt) {
     }
 #else
     // 12.6M rays/s
-//#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic)
     for (i32 y = 0; y < WIN_HEIGHT; y += 2) {
         for (i32 x = 0; x < WIN_WIDTH; x += 2) {
             const RayPacket packet = camera.get_primary_packet(x, y);
@@ -98,7 +125,7 @@ void Renderer::tick(f32 dt) {
                         screen->pixels[(x + u) + (y + v) * WIN_WIDTH] = 0xFF101010;
                         continue;
                     }
-                    const u32 cd = fminf(depth / 32.0f, 1.0f) * 0xFF;
+                    const u32 cd = fminf(depth / 2.0f, 1.0f) * 0xFF;
                     // const u32 cd = (hit.steps / 256.0f) * 0xFF;
                     const u32 color = (cd << 0) | (cd << 8) | (cd << 16) | 0xFF000000;
                     screen->pixels[(x + u) + (y + v) * WIN_WIDTH] = color;
