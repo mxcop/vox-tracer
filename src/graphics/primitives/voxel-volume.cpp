@@ -1,8 +1,106 @@
 #include "voxel-volume.h"
 
-constexpr int MAX_STEPS = 256;
+constexpr u32 MAX_STEPS = 256;
 
 // TODO: Multi-resolution traversal!
+#if USE_BRICKMAP
+
+HitInfo VoxelVolume::intersect(const Ray& ray) const {
+    HitInfo hit = {};
+
+    /* Early return if bounding box was not hit */
+    f32 tmin, tmax;
+    ray_vs_aabb(ray, tmin, tmax);
+    if (tmin > tmax) {
+        hit.depth = BIG_F32;
+        return hit;
+    }
+
+    /* Calculate the ray start, end, and extend */
+    const float3 p0 = ((ray.origin + ray.dir * (tmin + 0.001f)) - bbmin) * scale;
+    const float3 p1 = ((ray.origin + ray.dir * (tmax - 0.001f)) - bbmin) * scale;
+    const float3 extend = p1 - p0;
+    const float3 inv_extend = 1.0f / extend;
+    const float3 volume = (bbmax - bbmin) * scale;
+
+    /* Setup for DDA traversal */
+    f32 lod = BRICK_SIZE, rlod = 1.0f / BRICK_SIZE;
+    float3 pos = clamp(floorf(p0 * rlod) * lod, float3(0), volume - 1.0f);
+    float3 step = ray.sign_dir * lod;
+    float3 delta = inv_extend * step;
+    float3 side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
+
+    /* Start traversing */
+    float3 normal = {};
+    f32 t = 0.0f;
+    u32 i = 0;
+    for (; i < MAX_STEPS; ++i) {
+        u8 voxel = 0u;
+        /* If on the brickmap layer */
+        if (lod == BRICK_SIZE) {
+            voxel = fetch_brick(floori(pos * rlod));
+        } else {
+            voxel = fetch_voxel(floori(pos * rlod));
+        }
+
+        if (voxel) {
+            /* Stop if we hit something in L1 */
+            if (lod < BRICK_SIZE) {
+                hit.depth = tmin + (tmax - tmin) * t;
+                hit.normal = -normal * step;
+                hit.albedo = float3((f32)voxel / 256.0f);
+                hit.steps = i;
+                return hit;
+            }
+
+            /* Move down one level */
+            lod *= R_BRICK_SIZE, rlod *= BRICK_SIZE;
+            step *= R_BRICK_SIZE, delta *= R_BRICK_SIZE;
+
+            pos = clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+            side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
+            continue;
+        }
+
+        /* Move to the next voxel */
+        if (side.x < side.y) {
+            if (side.x < side.z) {
+                pos.x += step.x;
+                if (pos.x < 0 || pos.x >= volume.x) break;
+                normal = float3(1, 0, 0);
+                t = side.x;
+                side.x += delta.x;
+            } else {
+                pos.z += step.z;
+                if (pos.z < 0 || pos.z >= volume.z) break;
+                normal = float3(0, 0, 1);
+                t = side.z;
+                side.z += delta.z;
+            }
+        } else {
+            if (side.y < side.z) {
+                pos.y += step.y;
+                if (pos.y < 0 || pos.y >= volume.y) break;
+                normal = float3(0, 1, 0);
+                t = side.y;
+                side.y += delta.y;
+            } else {
+                pos.z += step.z;
+                if (pos.z < 0 || pos.z >= volume.z) break;
+                normal = float3(0, 0, 1);
+                t = side.z;
+                side.z += delta.z;
+            }
+        }
+    }
+
+    hit.depth = BIG_F32;
+    hit.steps = i;
+    return hit;
+}
+
+#else
+
 HitInfo VoxelVolume::intersect(const Ray& ray) const {
     HitInfo hit = {};
 
@@ -32,7 +130,7 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     float3 normal = {};
     for (; i < MAX_STEPS; ++i) {
         /* Fetch the current voxel */
-        u8 voxel = fetch_voxel(idx, size);
+        u8 voxel = fetch_voxel(idx);
         if (voxel != 0x00) {
             hit.depth += t / scale;
             hit.normal = -normal * step;
@@ -84,6 +182,8 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     return hit;
 }
 
+#endif
+
 bool VoxelVolume::is_occluded(const Ray& ray) const {
     HitInfo hit = {};
 
@@ -110,7 +210,7 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
 
     for (u32 i = 0; i < MAX_STEPS; ++i) {
         /* Fetch the current voxel */
-        u8 voxel = fetch_voxel(idx, size);
+        u8 voxel = fetch_voxel(idx);
         if (voxel != 0x00) {
             return true;
         }
@@ -122,24 +222,24 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
                 idx.x += step.x;
                 if (idx.x < 0 || idx.x >= size.x) break;
                 tmax.x += delta.x;
-                //if (tmax.x >= 1.0f) return false;
+                // if (tmax.x >= 1.0f) return false;
             } else {
                 idx.z += step.z;
                 if (idx.z < 0 || idx.z >= size.z) break;
                 tmax.z += delta.z;
-                //if (tmax.z >= 1.0f) return false;
+                // if (tmax.z >= 1.0f) return false;
             }
         } else {
             if (tmax.y < tmax.z) {
                 idx.y += step.y;
                 if (idx.y < 0 || idx.y >= size.y) break;
                 tmax.y += delta.y;
-                //if (tmax.y >= 1.0f) return false;
+                // if (tmax.y >= 1.0f) return false;
             } else {
                 idx.z += step.z;
                 if (idx.z < 0 || idx.z >= size.z) break;
                 tmax.z += delta.z;
-                //if (tmax.z >= 1.0f) return false;
+                // if (tmax.z >= 1.0f) return false;
             }
         }
     }
@@ -235,9 +335,12 @@ PacketHitInfo VoxelVolume::intersect(const RayPacket& packet) const {
         exit_mask = _mm_or_epi32(exit_mask, _mm_cmplt_epi32(ri.x, _mm_set1_epi32(0)));
         exit_mask = _mm_or_epi32(exit_mask, _mm_cmplt_epi32(ri.y, _mm_set1_epi32(0)));
         exit_mask = _mm_or_epi32(exit_mask, _mm_cmplt_epi32(ri.z, _mm_set1_epi32(0)));
-        exit_mask = _mm_or_epi32(exit_mask, _mm_cmpgt_epi32(ri.x, _mm_set1_epi32(voxel_size.x - 1)));
-        exit_mask = _mm_or_epi32(exit_mask, _mm_cmpgt_epi32(ri.y, _mm_set1_epi32(voxel_size.y - 1)));
-        exit_mask = _mm_or_epi32(exit_mask, _mm_cmpgt_epi32(ri.z, _mm_set1_epi32(voxel_size.z - 1)));
+        exit_mask =
+            _mm_or_epi32(exit_mask, _mm_cmpgt_epi32(ri.x, _mm_set1_epi32(voxel_size.x - 1)));
+        exit_mask =
+            _mm_or_epi32(exit_mask, _mm_cmpgt_epi32(ri.y, _mm_set1_epi32(voxel_size.y - 1)));
+        exit_mask =
+            _mm_or_epi32(exit_mask, _mm_cmpgt_epi32(ri.z, _mm_set1_epi32(voxel_size.z - 1)));
         status_mask = _mm_or_epi32(status_mask, exit_mask);
 
         /* Early exit if all rays are done */

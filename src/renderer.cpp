@@ -32,9 +32,10 @@ u32 Renderer::trace(const Ray& ray) const {
     HitInfo hit = volume->intersect(ray);
 
     /* Skybox color if the ray missed */
-    if (hit.depth == BIG_F32) return 0xFF101010;
-    float4 en = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
+    //if (hit.depth == BIG_F32) return 0xFF101010;
+    //float4 en = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
     //float4 en = float4(hit.albedo, 1.0f);
+    float4 en = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
 
     #if 0
     /* Shoot a shadow ray */
@@ -84,7 +85,7 @@ void Renderer::tick(f32 dt) {
             }
         }
     }
-#elif 0
+#elif 1
 #pragma omp parallel for schedule(dynamic)
     for (i32 y = 0; y < WIN_HEIGHT; ++y) {
         for (i32 x = 0; x < WIN_WIDTH; ++x) {
@@ -95,7 +96,8 @@ void Renderer::tick(f32 dt) {
     }
 #elif 0
     constexpr u32 TILE_SIZE = 16; // 7.7M rays/s
-    for (u32 y = 0; y < WIN_HEIGHT; y += TILE_SIZE) {
+#pragma omp parallel for schedule(dynamic)
+    for (i32 y = 0; y < WIN_HEIGHT; y += TILE_SIZE) {
         for (u32 x = 0; x < WIN_WIDTH; x += TILE_SIZE) {
             for (u32 v = 0; v < TILE_SIZE; ++v) {
                 u32 yv = y + v;

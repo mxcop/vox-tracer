@@ -7,9 +7,13 @@
 constexpr f32 DEFAULT_VOXEL_SCALE = 16.0f;
 
 /* Use morton ordering for voxels (slightly faster) */
-#define USE_MORTON 0
+#define USE_MORTON 1
 /* Use the AVX2 gather instructions to load voxels (worse on my AMD CPU) */
 #define USE_AVX2_GATHER 1
+
+#define USE_BRICKMAP 1
+constexpr u32 BRICK_SIZE = 8;
+constexpr f32 R_BRICK_SIZE = 1.0f / BRICK_SIZE;
 
 struct VoxelVolume {
     f32 scale = DEFAULT_VOXEL_SCALE;
@@ -36,6 +40,7 @@ struct VoxelVolume {
         };
     };
     std::vector<u8> voxels;
+    std::vector<u8> bricks;
 
     VoxelVolume() = default;
     /**
@@ -55,6 +60,54 @@ struct VoxelVolume {
         voxels.resize(bytes);
 
         /* Populate the voxel data */
+#if USE_BRICKMAP
+        bricks = std::vector<u8>();
+        bricks.resize(bytes / (BRICK_SIZE * BRICK_SIZE * BRICK_SIZE));
+
+        float3 bsize = size / BRICK_SIZE;
+
+        f32 rx = 1.0f / 128.0f;
+        for (u32 z = 0; z < size.z; z += BRICK_SIZE) {
+            for (u32 y = 0; y < size.y; y += BRICK_SIZE) {
+                for (u32 x = 0; x < size.x; x += BRICK_SIZE) {
+                    u8 brick = 0x00;
+                    for (u32 bz = 0; bz < BRICK_SIZE; bz++) {
+                        for (u32 by = 0; by < BRICK_SIZE; by++) {
+                            for (u32 bx = 0; bx < BRICK_SIZE; bx++) {
+                                const f32 fx = (f32)(x + bx) / 128.0f;
+                                const f32 fy = (f32)(y + by) / 128.0f;
+                                const f32 fz = (f32)(z + bz) / 128.0f;
+                                const f32 noise = noise3D(fx, fy, fz);
+
+#if USE_MORTON
+                                const u64 i = morton_encode((x + bx), (y + by), (z + bz));
+#else
+                                const u64 i =
+                                    ((z + bz) * size.x * size.y) + ((y + by) * size.x) + (x + bx);
+#endif
+                                if (noise > 0.09f) {
+                                    brick = 0xFF; /* brick contains at least 1 voxel */
+
+                                    const f32 color =
+                                        noise3D(fx * 8.0f, fy * 8.0f, fz * 8.0f) + .5f;
+                                    voxels[i] = color * 0xFF;
+                                } else {
+                                    voxels[i] = 0x00;
+                                }
+                            }
+                        }
+                    }
+#if USE_MORTON
+                    const u64 i = morton_encode(x / BRICK_SIZE, y / BRICK_SIZE, z / BRICK_SIZE);
+#else
+                    const u64 i = ((z / BRICK_SIZE) * bsize.x * bsize.y) +
+                                  ((y / BRICK_SIZE) * bsize.x) + (x / BRICK_SIZE);
+#endif
+                    bricks[i] = brick;
+                }
+            }
+        }
+#else
         f32 rx = 1.0f / 128.0f;
         for (u32 z = 0; z < size.z; ++z) {
             const f32 fz = (f32)z / 128.0f;
@@ -63,7 +116,7 @@ struct VoxelVolume {
                 f32 fx = 0;
                 for (u32 x = 0; x < size.x; ++x, fx += rx) {
                     const f32 noise = noise3D(fx, fy, fz);
-                    const f32 noise2 = noise3D(fx + 0.33f, fy + 0.66f, fz + 0.99f);
+                    const f32 noise2 = noise3D(fx * 8.0f, fy * 8.0f, fz * 8.0f) + .5f;
 #if USE_MORTON
                     const u64 i = morton_encode(x, y, z);
 #else
@@ -73,6 +126,7 @@ struct VoxelVolume {
                 }
             }
         }
+#endif
     }
 
     /**
@@ -102,6 +156,22 @@ struct VoxelVolume {
         const f32 tmin =
             _max(_max(_max(vmin4.m128_f32[0], vmin4.m128_f32[1]), vmin4.m128_f32[2]), 0.0f);
         return tmin <= tmax ? tmin : BIG_F32;
+    }
+
+    inline void ray_vs_aabb(const Ray& ray, f32& tmin_out, f32& tmax_out) const {
+        /* Idea to use fmsub to save 1 instruction came from
+         * <http://www.joshbarczak.com/blog/?p=787> */
+        const f128 ord = _mm_mul_ps(ray.o, ray.rd);
+        const f128 t1 = _mm_fmsub_ps(bmin, ray.rd, ord);
+        const f128 t2 = _mm_fmsub_ps(bmax, ray.rd, ord);
+
+        /* Find the near and far intersection point */
+        const f128 vmax4 = _mm_max_ps(t1, t2), vmin4 = _mm_min_ps(t1, t2);
+        const f32 tmax = _min(_min(vmax4.m128_f32[0], vmax4.m128_f32[1]), vmax4.m128_f32[2]);
+        /* The last max(0) here handles being inside of the AABB */
+        const f32 tmin =
+            _max(_max(_max(vmin4.m128_f32[0], vmin4.m128_f32[1]), vmin4.m128_f32[2]), 0.0f);
+        tmin_out = tmin, tmax_out = tmax;
     }
 
     /* Fast ray packet to aabb check, using SSE */
@@ -148,13 +218,25 @@ struct VoxelVolume {
     }
 
     /* Fetch a voxel from this volumes voxel data. */
-    __forceinline u8 fetch_voxel(const int3& idx, const int3& size) const {
+    __forceinline u8 fetch_voxel(const int3& idx) const {
 #if USE_MORTON
         const u64 i = morton_encode(idx.x, idx.y, idx.z);
 #else
+        const float3 size = voxel_size;
         size_t i = ((size_t)idx.z * size.x * size.y) + ((size_t)idx.y * size.x) + idx.x;
 #endif
         return voxels[i];
+    }
+
+    /* Fetch a brick from this volumes brick data. */
+    __forceinline u8 fetch_brick(const int3& idx) const {
+#if USE_MORTON
+        const u64 i = morton_encode(idx.x, idx.y, idx.z);
+#else
+        const float3 size = voxel_size / BRICK_SIZE;
+        size_t i = ((size_t)idx.z * size.x * size.y) + ((size_t)idx.y * size.x) + idx.x;
+#endif
+        return bricks[i];
     }
 
     /* Fetch 4 voxels using the indices inside an SSE register. */
