@@ -10,14 +10,6 @@ void Renderer::init() {
     volume = make_unique<VoxelVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
 }
 
-float dist_sq(float3 c, float3 p) {
-    float x1 = pow((p.x - c.x), 2);
-    float y1 = pow((p.y - c.y), 2);
-    float z1 = pow((p.z - c.z), 2);
-
-    return (x1 + y1 + z1);
-}
-
 u32 Renderer::trace(const Ray& ray) const {
     const HitInfo hit = volume->intersect(ray);
 
@@ -29,6 +21,7 @@ u32 Renderer::trace(const Ray& ray) const {
     //float4 color = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
     float4 color = float4(0);
 
+    /* Point & spot lights */
     #if 1
     for (const LightSource& light : lights) {
         /* Compute a shadow ray */
@@ -37,16 +30,21 @@ u32 Renderer::trace(const Ray& ray) const {
         const float3 light_dir = (light.origin - shadow_pos) / light_dist;
 
         /* Do nothing if the normal faces away from the light */
-        const f32 incidence = dot(hit.normal, light_dir);
+        f32 incidence = dot(hit.normal, light_dir);
         if (incidence <= 0.0f) continue;
-        //color *= incidence;
+
+        /* Handle aperture of spot light */
+        if (light.aperture < 1.0f) {
+            const f32 a = (dot(light_dir, light.dir) + 1.0f) * 0.5f;
+            if (a > light.aperture) continue;
+            incidence *= 1.0f - (a / light.aperture);
+        }
 
         /* Do nothing if outside the AOE of the light */
         const f32 sqd = light_dist * light_dist;
         if (sqd < (3.0f * 3.0f)) {
             const Ray shadow_ray = Ray(light.origin, shadow_pos - light.origin);
             const bool in_shadow = volume->is_occluded(shadow_ray);
-            //color /= sqd; /* falloff = r^2 */
 
             /* Do nothing if the point is in shadow */
             if (in_shadow) continue;
@@ -152,10 +150,10 @@ void Renderer::gui(f32 dt) {
 
     /* Display performance */
     ImGui::SetNextWindowBgAlpha(0.35f);
-    if (ImGui::Begin("Debug overlay", nullptr, overlay_flags)) {
+    if (ImGui::Begin("Perf overlay", nullptr, overlay_flags)) {
         f32 frame_time_us = frame_time * 1'000'000.0f;
         f64 win_size = (f64)WIN_WIDTH * WIN_HEIGHT;
-        ImGui::Text("Debug overlay\n");
+        ImGui::Text("Perf overlay\n");
         ImGui::Separator();
         ImGui::Text("FPS: %.1f", 1.0f / dt);
         ImGui::Separator();
@@ -167,9 +165,21 @@ void Renderer::gui(f32 dt) {
     }
     ImGui::End();
 
+    static float3 light_color = float3(1);
+    static f32 aperture = 1.0f;
+    if (ImGui::Begin("Debug window")) {
+        ImGui::Text("Debug options\n");
+        ImGui::Separator();
+        ImGui::SliderFloat("Aperture", &aperture, 0, 1);
+        ImGui::Separator();
+        ImGui::ColorPicker3("New light", &light_color.x);
+    }
+    ImGui::End();
+
     static bool q_down = false;
     if (IsKeyDown(GLFW_KEY_Q) && q_down == false) {
-        lights.emplace_back(camera.pos, float3(1.0f));
+        lights.emplace_back(camera.pos, normalize(camera.target - camera.pos), aperture,
+                            light_color);
         q_down = true;
     }
     if (!IsKeyDown(GLFW_KEY_Q) && q_down == true) {
