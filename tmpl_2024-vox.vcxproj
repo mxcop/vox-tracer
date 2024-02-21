@@ -201,6 +201,7 @@
     <ClInclude Include="lib\imgui\imstb_textedit.h" />
     <ClInclude Include="lib\imgui\imstb_truetype.h" />
     <ClInclude Include="src\graphics\camera.h" />
+    <ClInclude Include="src\graphics\light.h" />
     <ClInclude Include="src\graphics\rays\hit.h" />
     <ClInclude Include="src\graphics\primitives\voxel-volume.h" />
     <ClInclude Include="src\graphics\rays\packet.h" />

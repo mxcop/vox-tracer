@@ -92,6 +92,7 @@
     <ClInclude Include="src\morton.h" />
     <ClInclude Include="src\graphics\rays\packet.h" />
     <ClInclude Include="src\simd.h" />
+    <ClInclude Include="src\graphics\light.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template">

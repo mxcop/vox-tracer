@@ -6,14 +6,6 @@ void Renderer::init() {
         fclose(f);
     }
 
-    //i128 x = _mm_set_epi32(1, 1, 1, 1);
-    //i128 y = _mm_set_epi32(2, 2, 2, 2);
-    //i128 z = _mm_set_epi32(3, 3, 3, 3);
-
-    //i128 m = morton_encode(x, y, z);
-    //printf("morton: %i, %i, %i, %i\n", m.m128i_u32[0], m.m128i_u32[1], m.m128i_u32[2],
-    //       m.m128i_u32[3]);
-
     /* Create a voxel volume */
     volume = make_unique<VoxelVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
 }
@@ -23,8 +15,6 @@ float dist_sq(float3 c, float3 p) {
     float y1 = pow((p.y - c.y), 2);
     float z1 = pow((p.z - c.z), 2);
 
-    // distance between the centre
-    // and given point
     return (x1 + y1 + z1);
 }
 
@@ -33,46 +23,43 @@ u32 Renderer::trace(const Ray& ray) const {
 
     /* Skybox color if the ray missed */
     if (hit.depth >= BIG_F32) return 0xFF101010;
-    //float4 en = float4(hit.normal, 1.0f);
-    //float4 en = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
-    float4 en = float4(hit.albedo, 1.0f);
-    //float4 en = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
-    
+    //float4 color = float4(hit.normal, 1.0f);
+    //float4 color = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
+    //float4 color = float4(hit.albedo, 1.0f);
+    //float4 color = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
+    float4 color = float4(0);
+
     #if 1
-    /* Shoot a shadow ray */
-    const float3 shadow_pos = ray.origin + ray.dir * (hit.depth - 0.001f);
-    const float3 light_dir = normalize(test_light - shadow_pos);
+    for (const LightSource& light : lights) {
+        /* Compute a shadow ray */
+        const float3 shadow_pos = ray.origin + ray.dir * (hit.depth - 0.001f);
+        const f32 light_dist = length(light.origin - shadow_pos);
+        const float3 light_dir = (light.origin - shadow_pos) / light_dist;
 
-    /* Do nothing if the normal faces away from the light */
-    const f32 incidence = dot(hit.normal, light_dir);
-    if (incidence <= 0.0f) {
-        en = 0.0f;
-        return RGBF32_to_RGB8(&en);
-    }
-    en *= incidence;
+        /* Do nothing if the normal faces away from the light */
+        const f32 incidence = dot(hit.normal, light_dir);
+        if (incidence <= 0.0f) continue;
+        //color *= incidence;
 
-    /* Do nothing if outside the AOE of the light */
-    const f32 sqd = dist_sq(shadow_pos, test_light);
-    if (sqd < (3.0f * 3.0f)) {
-        const Ray shadow_ray = Ray(test_light, shadow_pos - test_light);
-        const bool in_shadow = volume->is_occluded(shadow_ray);
-        en /= sqd; /* falloff = r^2 */
+        /* Do nothing if outside the AOE of the light */
+        const f32 sqd = light_dist * light_dist;
+        if (sqd < (3.0f * 3.0f)) {
+            const Ray shadow_ray = Ray(light.origin, shadow_pos - light.origin);
+            const bool in_shadow = volume->is_occluded(shadow_ray);
+            //color /= sqd; /* falloff = r^2 */
 
-        /* Reduce the albedo if the point is in shadow */
-        if (in_shadow) {
-            en = 0.0f;
+            /* Do nothing if the point is in shadow */
+            if (in_shadow) continue;
+
+            color += hit.albedo * light.light * incidence / sqd;
         }
-    } else {
-        en = 0.0f;
     }
     #endif
 
-    return RGBF32_to_RGB8(&en);
+    return RGBF32_to_RGB8(&color);
 }
 
 void Renderer::tick(f32 dt) {
-
-    if (IsKeyDown(GLFW_KEY_Q)) test_light = camera.pos;
 
     Timer t;
 
@@ -179,6 +166,15 @@ void Renderer::gui(f32 dt) {
         ImGui::Text("Frame time: %.2fms", frame_time * 1'000.0f);
     }
     ImGui::End();
+
+    static bool q_down = false;
+    if (IsKeyDown(GLFW_KEY_Q) && q_down == false) {
+        lights.emplace_back(camera.pos, float3(1.0f));
+        q_down = true;
+    }
+    if (!IsKeyDown(GLFW_KEY_Q) && q_down == true) {
+        q_down = false;
+    }
 }
 
 void Renderer::shutdown() {

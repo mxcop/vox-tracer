@@ -45,8 +45,16 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
         if (voxel) {
             /* Stop if we hit something in L1 */
             if (lod < BRICK_SIZE) {
+                /* If we hit on the first step, we have to compute the normal */
+                if (i == 1) {
+                    const float3 c = (bbmin + bbmax) * 0.5f;
+                    const float3 p = (ray.origin + ray.dir * tmin) - c;
+                    const float3 d = fabs((bbmin - bbmax) * 0.5f);
+                    hit.normal = normalize(floorf(p / d * 1.001f));
+                } else {
+                    hit.normal = -normal * step;
+                }
                 hit.depth = tmin + (tmax - tmin) * t;
-                hit.normal = -normal * step;
                 hit.albedo = float3((f32)voxel / 256.0f);
                 hit.steps = i;
                 return hit;
@@ -189,11 +197,12 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
     /* Early return if bounding box was not hit */
     f32 tmin, tmax;
     ray_vs_aabb(ray, tmin, tmax);
-    if (tmin > tmax - 0.0001f) {
+    // tmax = min(tmax, 1.0f);
+    if (tmin > tmax || tmin > 1.0f) {
         return false;
     }
     tmax = min(tmax, 1.0f);
-
+    
     /* Calculate the ray start, end, and extend */
     const float3 p0 = ((ray.origin + ray.dir * (tmin + 0.0001f)) - bbmin) * scale;
     const float3 p1 = ((ray.origin + ray.dir * (tmax - 0.0001f)) - bbmin) * scale;
@@ -202,10 +211,10 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
     const float3 volume = (bbmax - bbmin) * scale;
 
     /* Exit if the end-point is outside the volume */
-    if (p1.x < 0 || p1.y < 0 || p1.z < 0 || p1.x > volume.x - 1 || p1.y > volume.y - 1 ||
-        p1.z > volume.z - 1) {
-        return false;
-    }
+    //if (p1.x < 0 || p1.y < 0 || p1.z < 0 || p1.x > volume.x - 1 || p1.y > volume.y - 1 ||
+    //    p1.z > volume.z - 1) {
+    //    return false;
+    //}
 
     /* Setup for DDA traversal */
     f32 lod = BRICK_SIZE, rlod = 1.0f / BRICK_SIZE;

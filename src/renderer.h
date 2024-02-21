@@ -2,6 +2,7 @@
 
 #include "graphics/camera.h"
 #include "graphics/primitives/voxel-volume.h"
+#include "graphics/light.h"
 
 class Renderer : public TheApp {
    public:
@@ -23,5 +24,5 @@ class Renderer : public TheApp {
 
     unique_ptr<VoxelVolume> volume;
     Camera camera;
-    float3 test_light = {};
+    vector<LightSource> lights;
 };
