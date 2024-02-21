@@ -29,10 +29,11 @@ float dist_sq(float3 c, float3 p) {
 }
 
 u32 Renderer::trace(const Ray& ray) const {
-    HitInfo hit = volume->intersect(ray);
+    const HitInfo hit = volume->intersect(ray);
 
     /* Skybox color if the ray missed */
     if (hit.depth >= BIG_F32) return 0xFF101010;
+    //float4 en = float4(hit.normal, 1.0f);
     //float4 en = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
     float4 en = float4(hit.albedo, 1.0f);
     //float4 en = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
@@ -40,31 +41,33 @@ u32 Renderer::trace(const Ray& ray) const {
     #if 1
     /* Shoot a shadow ray */
     const float3 shadow_pos = ray.origin + ray.dir * (hit.depth - 0.001f);
-    //if (dist_sq(test_light, shadow_pos) < 2.0f * 2.0f) {
-    //bool in_shadow = volume->is_occluded(test_light, shadow_pos);
-    Ray shadow_ray = Ray(test_light, shadow_pos - test_light);
-    //shadow_ray.t = length(shadow_pos - test_light);
-    bool in_shadow = volume->is_occluded(shadow_ray);
+    const float3 light_dir = normalize(test_light - shadow_pos);
 
-    //float4 en = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
+    /* Do nothing if the normal faces away from the light */
+    const f32 incidence = dot(hit.normal, light_dir);
+    if (incidence <= 0.0f) {
+        en = 0.0f;
+        return RGBF32_to_RGB8(&en);
+    }
+    en *= incidence;
 
-    if (in_shadow) {
-        en *= 0.5f;
+    /* Do nothing if outside the AOE of the light */
+    const f32 sqd = dist_sq(shadow_pos, test_light);
+    if (sqd < (3.0f * 3.0f)) {
+        const Ray shadow_ray = Ray(test_light, shadow_pos - test_light);
+        const bool in_shadow = volume->is_occluded(shadow_ray);
+        en /= sqd; /* falloff = r^2 */
+
+        /* Reduce the albedo if the point is in shadow */
+        if (in_shadow) {
+            en = 0.0f;
+        }
+    } else {
+        en = 0.0f;
     }
     #endif
-    //} else {
-    //    en *= 0.2f;
-    //}
-    return RGBF32_to_RGB8(&en);
 
-    /* Visualize the distance */
-    // u32 cd = fminf(hit.depth / 32.0f, 1.0f) * 0xFF;
-    /* Visualize the step count */
-    // u32 cd = (hit.steps / 256.0f) * 0xFF;
-    // u32 color = (cd << 0) | (cd << 8) | (cd << 16) | 0xFF000000;
-    // float4 en = float4(hit.albedo * dot(hit.normal, normalize(float3(0.5f, 0.5f, 0.5f))), 1.0f);
-    // u32 color = RGBF32_to_RGB8(&en);
-    // return color;
+    return RGBF32_to_RGB8(&en);
 }
 
 void Renderer::tick(f32 dt) {
