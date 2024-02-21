@@ -180,7 +180,7 @@ struct VoxelVolume {
         f128 tmax = _mm_set_ps1(BIG_F32);
 
         for (u32 a = 0; a < 3; ++a) {
-            #if 0
+#if 0
             const f128 aabb_min = _mm_set_ps1(packet.signs[a] > 0.0f ? bbmin[a] : bbmax[a]);
             const f128 aabb_max = _mm_set_ps1(packet.signs[a] > 0.0f ? bbmax[a] : bbmin[a]);
 
@@ -189,7 +189,7 @@ struct VoxelVolume {
 
             tmin = _mm_max_ps(tmin, dmin);
             tmax = _mm_min_ps(tmax, dmax);
-            #else
+#else
 
             // TODO: optimize function check more...
             const f128 t1 =
@@ -199,15 +199,15 @@ struct VoxelVolume {
 
             tmin = _mm_max_ps(tmin, _mm_min_ps(t1, t2));
             tmax = _mm_min_ps(tmax, _mm_max_ps(t1, t2));
-            //tmin = _mm_min_ps(_mm_max_ps(t1, tmin), _mm_max_ps(t2, tmin));
-            //tmax = _mm_max_ps(_mm_min_ps(t1, tmax), _mm_min_ps(t2, tmax));
-            #endif
+// tmin = _mm_min_ps(_mm_max_ps(t1, tmin), _mm_max_ps(t2, tmin));
+// tmax = _mm_max_ps(_mm_min_ps(t1, tmax), _mm_min_ps(t2, tmax));
+#endif
 
-            //float t1 = (box->min[d] - ray->origin[d]) * ray->dir_inv[d];
-            //float t2 = (box->max[d] - ray->origin[d]) * ray->dir_inv[d];
+            // float t1 = (box->min[d] - ray->origin[d]) * ray->dir_inv[d];
+            // float t2 = (box->max[d] - ray->origin[d]) * ray->dir_inv[d];
 
-            //tmin = max(tmin, min(t1, t2));
-            //tmax = min(tmax, max(t1, t2));
+            // tmin = max(tmin, min(t1, t2));
+            // tmax = min(tmax, max(t1, t2));
         }
         // tmin = _mm_max_ps(_mm_setzero_ps(), tmin);
 
@@ -240,7 +240,7 @@ struct VoxelVolume {
     }
 
     /* Fetch 4 voxels using the indices inside an SSE register. */
-    __forceinline i128 fetch_voxels(const i128 indices) const { 
+    __forceinline i128 fetch_voxels(const i128 indices) const {
 #if USE_AVX2_GATHER
         return gather_voxels(indices);
 #else

@@ -32,23 +32,26 @@ u32 Renderer::trace(const Ray& ray) const {
     HitInfo hit = volume->intersect(ray);
 
     /* Skybox color if the ray missed */
-    //if (hit.depth == BIG_F32) return 0xFF101010;
+    if (hit.depth >= BIG_F32) return 0xFF101010;
     //float4 en = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
-    //float4 en = float4(hit.albedo, 1.0f);
-    float4 en = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
-
-    #if 0
+    float4 en = float4(hit.albedo, 1.0f);
+    //float4 en = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
+    
+    #if 1
     /* Shoot a shadow ray */
-    //const float3 light_dir = normalize(float3(0.5f, 0.2f, 0.8f));
-    const float3 shadow_pos = ray.origin + ray.dir * (hit.depth);
+    const float3 shadow_pos = ray.origin + ray.dir * (hit.depth - 0.001f);
     //if (dist_sq(test_light, shadow_pos) < 2.0f * 2.0f) {
-    const Ray shadow_ray = Ray(shadow_pos, test_light - shadow_pos);
+    //bool in_shadow = volume->is_occluded(test_light, shadow_pos);
+    Ray shadow_ray = Ray(test_light, shadow_pos - test_light);
+    //shadow_ray.t = length(shadow_pos - test_light);
     bool in_shadow = volume->is_occluded(shadow_ray);
 
-        if (in_shadow) {
-            en *= 0.2f;
-        }
-        #endif
+    //float4 en = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
+
+    if (in_shadow) {
+        en *= 0.5f;
+    }
+    #endif
     //} else {
     //    en *= 0.2f;
     //}

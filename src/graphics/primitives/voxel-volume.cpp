@@ -2,7 +2,6 @@
 
 constexpr u32 MAX_STEPS = 256;
 
-// TODO: Multi-resolution traversal!
 #if USE_BRICKMAP
 
 HitInfo VoxelVolume::intersect(const Ray& ray) const {
@@ -11,7 +10,7 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     /* Early return if bounding box was not hit */
     f32 tmin, tmax;
     ray_vs_aabb(ray, tmin, tmax);
-    if (tmin > tmax) {
+    if (tmin > tmax - 0.01f) {
         hit.depth = BIG_F32;
         return hit;
     }
@@ -184,6 +183,103 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
 
 #endif
 
+#if USE_BRICKMAP
+
+bool VoxelVolume::is_occluded(const Ray& ray) const {
+    /* Early return if bounding box was not hit */
+    f32 tmin, tmax;
+    ray_vs_aabb(ray, tmin, tmax);
+    if (tmin > tmax - 0.0001f) {
+        return false;
+    }
+    tmax = min(tmax, 1.0f);
+
+    /* Calculate the ray start, end, and extend */
+    const float3 p0 = ((ray.origin + ray.dir * (tmin + 0.0001f)) - bbmin) * scale;
+    const float3 p1 = ((ray.origin + ray.dir * (tmax - 0.0001f)) - bbmin) * scale;
+    const float3 extend = p1 - p0;
+    const float3 inv_extend = 1.0f / extend;
+    const float3 volume = (bbmax - bbmin) * scale;
+
+    /* Exit if the end-point is outside the volume */
+    if (p1.x < 0 || p1.y < 0 || p1.z < 0 || p1.x > volume.x - 1 || p1.y > volume.y - 1 ||
+        p1.z > volume.z - 1) {
+        return false;
+    }
+
+    /* Setup for DDA traversal */
+    f32 lod = BRICK_SIZE, rlod = 1.0f / BRICK_SIZE;
+    float3 pos = clamp(floorf(p0 * rlod) * lod, float3(0), volume - 1.0f);
+    float3 step = ray.sign_dir * lod;
+    float3 delta = inv_extend * step;
+    float3 side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
+
+    /* Start traversing */
+    float3 normal = {};
+    f32 t = 0.0f;
+    for (u32 i = 0; i < MAX_STEPS; ++i) {
+        u8 voxel = 0u;
+        /* If on the brickmap layer */
+        if (lod == BRICK_SIZE) {
+            voxel = fetch_brick(floori(pos * rlod));
+        } else {
+            voxel = fetch_voxel(floori(pos * rlod));
+        }
+
+        if (voxel) {
+            /* Stop if we hit something in L1 */
+            if (lod < BRICK_SIZE) {
+                return true;
+            }
+
+            /* Move down one level */
+            lod *= R_BRICK_SIZE, rlod *= BRICK_SIZE;
+            step *= R_BRICK_SIZE, delta *= R_BRICK_SIZE;
+
+            pos =
+                clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+            side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
+            continue;
+        }
+
+        /* Move to the next voxel */
+        if (side.x < side.y) {
+            if (side.x < side.z) {
+                pos.x += step.x;
+                if (pos.x < 0 || pos.x >= volume.x) break;
+                normal = float3(1, 0, 0);
+                t = side.x;
+                side.x += delta.x;
+            } else {
+                pos.z += step.z;
+                if (pos.z < 0 || pos.z >= volume.z) break;
+                normal = float3(0, 0, 1);
+                t = side.z;
+                side.z += delta.z;
+            }
+        } else {
+            if (side.y < side.z) {
+                pos.y += step.y;
+                if (pos.y < 0 || pos.y >= volume.y) break;
+                normal = float3(0, 1, 0);
+                t = side.y;
+                side.y += delta.y;
+            } else {
+                pos.z += step.z;
+                if (pos.z < 0 || pos.z >= volume.z) break;
+                normal = float3(0, 0, 1);
+                t = side.z;
+                side.z += delta.z;
+            }
+        }
+        if (t > 1.0f) break;
+    }
+
+    return false;
+}
+
+#else
+
 bool VoxelVolume::is_occluded(const Ray& ray) const {
     HitInfo hit = {};
 
@@ -245,6 +341,8 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
     }
     return false;
 }
+
+#endif
 
 static __forceinline i128 normal_encode(const i128 x, const i128 y, const i128 z, const u32 sx,
                                         const u32 sy) {

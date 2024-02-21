@@ -34,6 +34,7 @@ struct Ray {
             f32 _;
         };
     };
+    f32 t = BIG_F32;
 
     Ray() = default;
     inline Ray(const float3& origin, const float3& dir)
