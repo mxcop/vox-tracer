@@ -7,10 +7,37 @@ void Renderer::init() {
         fclose(f);
     }
 
+    accumulator = (float4*)MALLOC64(WIN_WIDTH * WIN_HEIGHT * 16);
+    memset(accumulator, 0, WIN_WIDTH * WIN_HEIGHT * 16);
+
     bnoise = BlueNoise();
 
     /* Create a voxel volume */
     volume = make_unique<VoxelVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
+}
+
+/* Source : <https://github.com/tqjxlm/Monte-Carlo-Ray-Tracer> */
+static float3 sample_hemisphere_weighted(const f32 r1, const f32 r2, const float3& n) {
+    f32 theta = acos(sqrt(1.0f - r1));
+    f32 phi = 2.0f * PI * r2;
+    f32 xs = sinf(theta) * cosf(phi);
+    f32 ys = cosf(theta);
+    f32 zs = sinf(theta) * sinf(phi);
+    float3 y(n.x, n.y, n.z);
+    float3 h = y;
+
+    if ((abs(h.x) <= abs(h.y)) && (abs(h.x) <= abs(h.z))) {
+        h.x = 1.0f;
+    } else if ((abs(h.y) <= abs(h.x)) && (abs(h.y) <= abs(h.z))) {
+        h.y = 1.0f;
+    } else {
+        h.z = 1.0f;
+    }
+
+    float3 x = normalize(cross(h, y));
+    float3 z = normalize(cross(x, y));
+
+    return normalize(xs * x + ys * y + zs * z);
 }
 
 u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
@@ -18,16 +45,63 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
 
     float4 color = float4(0);
 
-    /* R2 irrationals */
-    const float R2 = 1.22074408460575947536f;
-    const float R2X = 1.0f / R2;
-    const float R2Y = 1.0f / (R2 * R2);
-    const float R2Z = 1.0f / (R2 * R2 * R2);
-
     /* Point & spot lights */
-    #if 0
+    #if 1
     /* Skybox color if the ray missed */
     if (hit.depth >= BIG_F32) return 0xFF101010;
+
+    /* Ambient light */
+#if 1
+    /* R2 irrationals */
+    const f32 R2 = 1.22074408460575947536f;
+    const f32 R2X = 1.0f / R2;
+    const f32 R2Y = 1.0f / (R2 * R2);
+    const f32 R2Z = 1.0f / (R2 * R2 * R2);
+    const f32 R2_2D = 1.32471795724474602596f;
+    const f32 R2X_2D = 1.0f / R2_2D;
+    const f32 R2Y_2D = 1.0f / (R2_2D * R2_2D);
+
+    float3 ambient_light = float3(0.0f);
+    constexpr f32 SAMPLES = 4;
+    for (u32 i = 0; i < SAMPLES; i++) {
+        /* Generate a random direction */
+#if 0
+        /* Blue noise + R2 (uniform distribution) */
+        float3 raw_noise = bnoise.sample_3d(x, y);
+        float3 quasi_noise;
+        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)(frame + i), 1.0f);
+        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)(frame + i), 1.0f);
+        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)(frame + i), 1.0f);
+        float3 ambient_dir = normalize(quasi_noise);
+#else
+        /* Blue noise + R2 (cosine weighted distribution) */
+        float2 raw_noise = bnoise.sample_2d(x, y);
+        f32 quasi_x = fmod(raw_noise.x + R2X_2D * (f32)(frame + i), 1.0f);
+        f32 quasi_y = fmod(raw_noise.y + R2Y_2D * (f32)(frame + i), 1.0f);
+        float3 ambient_dir = sample_hemisphere_weighted(quasi_x, quasi_y, hit.normal);
+#endif
+
+        /* Flip the ambient dir if it's facing the wrong way */
+        if (dot(ambient_dir, hit.normal) < 0.0f) {
+            ambient_dir = -ambient_dir;
+        }
+        /* Incidence is already applied by the consine weighted distribution! */
+        const f32 ind = 1.0f; // dot(ambient_dir, hit.normal);
+
+        /* Shoot the ambient ray */
+        const float3 hit_pos = ray.origin + ray.dir * (hit.depth - 0.001f);
+        const Ray ambient_ray = Ray(hit_pos, ambient_dir * 1000.0f);
+        const bool in_shadow = volume->is_occluded(ambient_ray);
+
+        if (not in_shadow) {
+            ambient_light += float3(1.0f, 0.98f, 0.92f) * ind;
+        }
+    }
+
+    color += hit.albedo * (ambient_light / SAMPLES);
+
+    return RGBF32_to_RGB8(&color);
+#endif
 
     for (const LightSource& light : lights) {
         /* Compute a shadow ray */
@@ -83,6 +157,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
 
 void Renderer::tick(f32 dt) {
     frame++;
+    if (frame > 100) frame = 0;
     Timer t;
 
 #if 0

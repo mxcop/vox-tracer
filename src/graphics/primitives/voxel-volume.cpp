@@ -73,8 +73,7 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             lod *= 2.0f, rlod *= 0.5f;
             step *= 2.0f, delta *= 2.0f;
 
-            pos =
-                clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+            pos = clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
             side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
             continue;
         }

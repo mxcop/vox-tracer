@@ -28,4 +28,6 @@ class Renderer : public TheApp {
     Camera camera;
     vector<LightSource> lights;
     BlueNoise bnoise;
+
+    float4* accumulator = nullptr;
 };
