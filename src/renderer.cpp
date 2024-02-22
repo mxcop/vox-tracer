@@ -23,21 +23,20 @@ static float3 sample_hemisphere_weighted(const f32 r1, const f32 r2, const float
     f32 xs = sinf(theta) * cosf(phi);
     f32 ys = cosf(theta);
     f32 zs = sinf(theta) * sinf(phi);
-    float3 y(n.x, n.y, n.z);
-    float3 h = y;
+    float3 h = fabs(n);
 
-    if ((abs(h.x) <= abs(h.y)) && (abs(h.x) <= abs(h.z))) {
+    if ((h.x <= h.y) && (h.x <= h.z)) {
         h.x = 1.0f;
-    } else if ((abs(h.y) <= abs(h.x)) && (abs(h.y) <= abs(h.z))) {
+    } else if ((h.y <= h.x) && (h.y <= h.z)) {
         h.y = 1.0f;
     } else {
         h.z = 1.0f;
     }
 
-    float3 x = normalize(cross(h, y));
-    float3 z = normalize(cross(x, y));
+    float3 x = normalize(cross(h, n));
+    float3 z = normalize(cross(x, n));
 
-    return normalize(xs * x + ys * y + zs * z);
+    return normalize(xs * x + ys * n + zs * z);
 }
 
 u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
@@ -46,7 +45,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     float4 color = float4(0);
 
     /* Point & spot lights */
-    #if 1
+    #if 0
     /* Skybox color if the ray missed */
     if (hit.depth >= BIG_F32) return 0xFF101010;
 
@@ -89,7 +88,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
         const f32 ind = 1.0f; // dot(ambient_dir, hit.normal);
 
         /* Shoot the ambient ray */
-        const float3 hit_pos = ray.origin + ray.dir * (hit.depth - 0.001f);
+        const float3 hit_pos = ray.origin + ray.dir * (hit.depth - 0.01f);
         const Ray ambient_ray = Ray(hit_pos, ambient_dir * 1000.0f);
         const bool in_shadow = volume->is_occluded(ambient_ray);
 

@@ -3,7 +3,7 @@
 #pragma once
 
 /* Settings */
-#if 1
+#if 0
 constexpr u32 WIN_WIDTH = 1280;
 constexpr u32 WIN_HEIGHT = 720;
 #else
