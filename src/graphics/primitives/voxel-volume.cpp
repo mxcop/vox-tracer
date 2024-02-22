@@ -23,7 +23,8 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     const float3 volume = (bbmax - bbmin) * scale;
 
     /* Setup for DDA traversal */
-    f32 lod = BRICK_SIZE, rlod = 1.0f / BRICK_SIZE;
+    f32 lod = MAX_LEVEL_SIZE, rlod = 1.0f / MAX_LEVEL_SIZE;
+    u32 level = BRICK_LEVELS;
     float3 pos = clamp(floorf(p0 * rlod) * lod, float3(0), volume - 1.0f);
     float3 step = ray.sign_dir * lod;
     float3 delta = inv_extend * step;
@@ -32,19 +33,13 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     /* Start traversing */
     float3 normal = {};
     f32 t = 0.0f;
-    u32 i = 0;
+    u32 i = 0, j = 0;
     for (; i < MAX_STEPS; ++i) {
-        u8 voxel = 0u;
-        /* If on the brickmap layer */
-        if (lod == BRICK_SIZE) {
-            voxel = fetch_brick(floori(pos * rlod));
-        } else {
-            voxel = fetch_voxel(floori(pos * rlod));
-        }
+        const u8 voxel = fetch_voxel(floori(pos * rlod), level);
 
         if (voxel) {
             /* Stop if we hit something in L1 */
-            if (lod < BRICK_SIZE) {
+            if (level == 0) {
                 /* If we hit on the first step, we have to compute the normal */
                 if (i == 1) {
                     const float3 c = (bbmin + bbmax) * 0.5f;
@@ -59,12 +54,27 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
                 hit.steps = i;
                 return hit;
             }
+            level--, j = 0;
 
             /* Move down one level */
-            lod *= R_BRICK_SIZE, rlod *= BRICK_SIZE;
-            step *= R_BRICK_SIZE, delta *= R_BRICK_SIZE;
+            lod *= 0.5f, rlod *= 2.0f;
+            step *= 0.5f, delta *= 0.5f;
 
             pos = clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+            side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
+            continue;
+        }
+
+        /* (try) move up one level after 12 steps */
+        if (j++ >= 12 && level < BRICK_LEVELS) {
+            level++, j = 0;
+
+            /* Move up one level */
+            lod *= 2.0f, rlod *= 0.5f;
+            step *= 2.0f, delta *= 2.0f;
+
+            pos =
+                clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
             side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
             continue;
         }
@@ -217,7 +227,8 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
     //}
 
     /* Setup for DDA traversal */
-    f32 lod = BRICK_SIZE, rlod = 1.0f / BRICK_SIZE;
+    f32 lod = MAX_LEVEL_SIZE, rlod = 1.0f / MAX_LEVEL_SIZE;
+    u32 level = BRICK_LEVELS;
     float3 pos = clamp(floorf(p0 * rlod) * lod, float3(0), volume - 1.0f);
     float3 step = ray.sign_dir * lod;
     float3 delta = inv_extend * step;
@@ -226,24 +237,33 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
     /* Start traversing */
     float3 normal = {};
     f32 t = 0.0f;
-    for (u32 i = 0; i < MAX_STEPS; ++i) {
-        u8 voxel = 0u;
-        /* If on the brickmap layer */
-        if (lod == BRICK_SIZE) {
-            voxel = fetch_brick(floori(pos * rlod));
-        } else {
-            voxel = fetch_voxel(floori(pos * rlod));
-        }
+    for (u32 i = 0, j = 0; i < MAX_STEPS; ++i) {
+        const u8 voxel = fetch_voxel(floori(pos * rlod), level);
 
         if (voxel) {
             /* Stop if we hit something in L1 */
-            if (lod < BRICK_SIZE) {
+            if (level == 0) {
                 return true;
             }
+            level--, j = 0;
 
             /* Move down one level */
-            lod *= R_BRICK_SIZE, rlod *= BRICK_SIZE;
-            step *= R_BRICK_SIZE, delta *= R_BRICK_SIZE;
+            lod *= 0.5f, rlod *= 2.0f;
+            step *= 0.5f, delta *= 0.5f;
+
+            pos =
+                clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+            side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
+            continue;
+        }
+
+        /* (try) move up one level after 12 steps */
+        if (j++ >= 12 && level < BRICK_LEVELS) {
+            level++, j = 0;
+
+            /* Move up one level */
+            lod *= 2.0f, rlod *= 0.5f;
+            step *= 2.0f, delta *= 2.0f;
 
             pos =
                 clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);

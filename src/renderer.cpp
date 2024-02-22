@@ -1,3 +1,4 @@
+#include <functional>
 void Renderer::init() {
     /* Try load the camera settings */
     FILE* f = fopen("camera.bin", "rb");
@@ -6,28 +7,46 @@ void Renderer::init() {
         fclose(f);
     }
 
+    bnoise = BlueNoise();
+
     /* Create a voxel volume */
     volume = make_unique<VoxelVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
 }
 
-u32 Renderer::trace(const Ray& ray) const {
+u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     const HitInfo hit = volume->intersect(ray);
 
-    /* Skybox color if the ray missed */
-    if (hit.depth >= BIG_F32) return 0xFF101010;
-    //float4 color = float4(hit.normal, 1.0f);
-    //float4 color = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
-    //float4 color = float4(hit.albedo, 1.0f);
-    //float4 color = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
     float4 color = float4(0);
 
+    /* R2 irrationals */
+    const float R2 = 1.22074408460575947536f;
+    const float R2X = 1.0f / R2;
+    const float R2Y = 1.0f / (R2 * R2);
+    const float R2Z = 1.0f / (R2 * R2 * R2);
+
     /* Point & spot lights */
-    #if 1
+    #if 0
+    /* Skybox color if the ray missed */
+    if (hit.depth >= BIG_F32) return 0xFF101010;
+
     for (const LightSource& light : lights) {
         /* Compute a shadow ray */
         const float3 shadow_pos = ray.origin + ray.dir * (hit.depth - 0.001f);
-        const f32 light_dist = length(light.origin - shadow_pos);
-        const float3 light_dir = (light.origin - shadow_pos) / light_dist;
+
+        #if 0
+        float3 raw_noise = bnoise.sample_3d(x, y);
+        u32 frame_offset = frame % 128u;
+        float3 quasi_noise;
+        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame_offset, 1.0f);
+        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame_offset, 1.0f);
+        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame_offset, 1.0f);
+        const float3 light_pos = light.origin + (quasi_noise * 0.05f - 0.025f);
+        #else
+        const float3 light_pos = light.origin;
+        #endif
+
+        const f32 light_dist = length(light_pos - shadow_pos);
+        const float3 light_dir = (light_pos - shadow_pos) / light_dist;
 
         /* Do nothing if the normal faces away from the light */
         f32 incidence = dot(hit.normal, light_dir);
@@ -42,23 +61,28 @@ u32 Renderer::trace(const Ray& ray) const {
 
         /* Do nothing if outside the AOE of the light */
         const f32 sqd = light_dist * light_dist;
-        if (sqd < (3.0f * 3.0f)) {
-            const Ray shadow_ray = Ray(light.origin, shadow_pos - light.origin);
+        if (sqd < (8.0f * 8.0f)) {
+            const Ray shadow_ray = Ray(light_pos, shadow_pos - light_pos);
             const bool in_shadow = volume->is_occluded(shadow_ray);
 
             /* Do nothing if the point is in shadow */
             if (in_shadow) continue;
 
-            color += hit.albedo * light.light * incidence / sqd;
+            color += hit.albedo * light.light * incidence / (sqd * 0.2f);
         }
     }
+    #else
+    //color = float4(hit.normal, 1.0f);
+    //color = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
+    //color = float4(hit.albedo, 1.0f);
+    color = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
     #endif
 
     return RGBF32_to_RGB8(&color);
 }
 
 void Renderer::tick(f32 dt) {
-
+    frame++;
     Timer t;
 
 #if 0
@@ -81,7 +105,7 @@ void Renderer::tick(f32 dt) {
     for (i32 y = 0; y < WIN_HEIGHT; ++y) {
         for (i32 x = 0; x < WIN_WIDTH; ++x) {
             Ray ray = camera.get_primary_ray(x, y);
-            u32 color = trace(ray);
+            u32 color = trace(ray, x, y);
             screen->pixels[x + y * WIN_WIDTH] = color;
         }
     }

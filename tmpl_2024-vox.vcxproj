@@ -178,6 +178,7 @@
     <ClCompile Include="lib\imgui\imgui_tables.cpp" />
     <ClCompile Include="lib\imgui\imgui_widgets.cpp" />
     <ClCompile Include="src\graphics\camera.cpp" />
+    <ClCompile Include="src\graphics\noise\blue.cpp" />
     <ClCompile Include="src\graphics\primitives\voxel-volume.cpp" />
     <ClCompile Include="template\opencl.cpp" />
     <ClCompile Include="template\opengl.cpp" />
@@ -200,8 +201,11 @@
     <ClInclude Include="lib\imgui\imstb_rectpack.h" />
     <ClInclude Include="lib\imgui\imstb_textedit.h" />
     <ClInclude Include="lib\imgui\imstb_truetype.h" />
+    <ClInclude Include="lib\ogt\ogt_vox.h" />
     <ClInclude Include="src\graphics\camera.h" />
     <ClInclude Include="src\graphics\light.h" />
+    <ClInclude Include="src\graphics\noise\blue.h" />
+    <ClInclude Include="src\graphics\rays\frustum.h" />
     <ClInclude Include="src\graphics\rays\hit.h" />
     <ClInclude Include="src\graphics\primitives\voxel-volume.h" />
     <ClInclude Include="src\graphics\rays\packet.h" />

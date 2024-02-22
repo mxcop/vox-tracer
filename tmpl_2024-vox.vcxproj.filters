@@ -38,6 +38,7 @@
     <ClCompile Include="template\tmpl8math.cpp" />
     <ClCompile Include="src\graphics\primitives\voxel-volume.cpp" />
     <ClCompile Include="src\graphics\camera.cpp" />
+    <ClCompile Include="src\graphics\noise\blue.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\renderer.h" />
@@ -93,6 +94,9 @@
     <ClInclude Include="src\graphics\rays\packet.h" />
     <ClInclude Include="src\simd.h" />
     <ClInclude Include="src\graphics\light.h" />
+    <ClInclude Include="src\graphics\rays\frustum.h" />
+    <ClInclude Include="lib\ogt\ogt_vox.h" />
+    <ClInclude Include="src\graphics\noise\blue.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template">

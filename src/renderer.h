@@ -3,11 +3,12 @@
 #include "graphics/camera.h"
 #include "graphics/primitives/voxel-volume.h"
 #include "graphics/light.h"
+#include "graphics/noise/blue.h"
 
 class Renderer : public TheApp {
    public:
     void init();
-    u32 trace(const Ray& ray) const;
+    u32 trace(const Ray& ray, const u32 x, const u32 y) const;
     void tick(f32 dt);
     void gui(f32 dt);
     void shutdown();
@@ -21,8 +22,10 @@ class Renderer : public TheApp {
 
     int2 mousePos;
     f32 frame_time = 1.0f;
+    u32 frame = 0u;
 
     unique_ptr<VoxelVolume> volume;
     Camera camera;
     vector<LightSource> lights;
+    BlueNoise bnoise;
 };
