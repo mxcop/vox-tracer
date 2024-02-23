@@ -67,7 +67,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     const f32 R2Y_2D = 1.0f / (R2_2D * R2_2D);
 
     float3 ambient_light = float3(0.0f);
-    constexpr f32 SAMPLES = 4;
+    constexpr f32 SAMPLES = 4; 
     for (u32 i = 0; i < SAMPLES; i++) {
         /* Generate a random direction */
 #if 0
