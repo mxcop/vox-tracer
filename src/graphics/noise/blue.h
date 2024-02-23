@@ -1,8 +1,5 @@
 #pragma once
 
-//#define STB_IMAGE_IMPLEMENTATION
-//#include "stb_image.h"
-
 /* Blue noise sampler */
 class BlueNoise {
     vector<f32> sampler;

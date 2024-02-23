@@ -1,4 +1,5 @@
 #include <functional>
+
 void Renderer::init() {
     /* Try load the camera settings */
     FILE* f = fopen("camera.bin", "rb");
@@ -11,6 +12,7 @@ void Renderer::init() {
     memset(accumulator, 0, WIN_WIDTH * WIN_HEIGHT * 16);
 
     bnoise = BlueNoise();
+    skydome = SkyDome("assets/skydome.hdr");
 
     /* Create a voxel volume */
     volume = make_unique<VoxelVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
@@ -45,12 +47,16 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     float4 color = float4(0);
 
     /* Point & spot lights */
-    #if 0
+    #if 1
     /* Skybox color if the ray missed */
-    if (hit.depth >= BIG_F32) return 0xFF101010;
+    if (hit.depth >= BIG_F32) {
+        color = skydome.sample_dir(ray.dir);
+        return RGBF32_to_RGB8(&color);
+        // return 0xFF101010;
+    }
 
     /* Ambient light */
-#if 1
+#if 0
     /* R2 irrationals */
     const f32 R2 = 1.22074408460575947536f;
     const f32 R2X = 1.0f / R2;

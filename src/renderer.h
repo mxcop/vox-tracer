@@ -4,6 +4,7 @@
 #include "graphics/primitives/voxel-volume.h"
 #include "graphics/light.h"
 #include "graphics/noise/blue.h"
+#include "graphics/skydome.h"
 
 class Renderer : public TheApp {
    public:
@@ -27,7 +28,9 @@ class Renderer : public TheApp {
     unique_ptr<VoxelVolume> volume;
     Camera camera;
     vector<LightSource> lights;
+
     BlueNoise bnoise;
+    SkyDome skydome;
 
     float4* accumulator = nullptr;
 };

@@ -39,6 +39,7 @@
     <ClCompile Include="src\graphics\primitives\voxel-volume.cpp" />
     <ClCompile Include="src\graphics\camera.cpp" />
     <ClCompile Include="src\graphics\noise\blue.cpp" />
+    <ClCompile Include="src\graphics\skydome.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\renderer.h" />
@@ -97,6 +98,7 @@
     <ClInclude Include="src\graphics\rays\frustum.h" />
     <ClInclude Include="lib\ogt\ogt_vox.h" />
     <ClInclude Include="src\graphics\noise\blue.h" />
+    <ClInclude Include="src\graphics\skydome.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template">
