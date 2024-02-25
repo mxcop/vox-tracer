@@ -16,6 +16,7 @@ void Renderer::init() {
 
     /* Create a voxel volume */
     volume = make_unique<VoxelVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
+    // volume = make_unique<BrickVolume>(float3(0.0f, 0.0f, 0.0f), int3(2048, 2048, 2048));
 }
 
 /* Source : <https://github.com/tqjxlm/Monte-Carlo-Ray-Tracer> */
@@ -154,7 +155,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     //color = float4(hit.normal, 1.0f);
     //color = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
     //color = float4(hit.albedo, 1.0f);
-    color = float4(hit.steps / 256.0f, hit.steps / 256.0f, hit.steps / 256.0f, 1.0f);
+    color = float4(hit.steps / 64.0f, hit.steps / 64.0f, hit.steps / 64.0f, 1.0f);
     #endif
 
     return RGBF32_to_RGB8(&color);

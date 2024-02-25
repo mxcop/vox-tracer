@@ -41,7 +41,7 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             /* Stop if we hit something in L1 */
             if (level == 0) {
                 /* If we hit on the first step, we have to compute the normal */
-                if (i == 1) {
+                if (i <= BRICK_LEVELS) {
                     const float3 c = (bbmin + bbmax) * 0.5f;
                     const float3 p = (ray.origin + ray.dir * tmin) - c;
                     const float3 d = fabs((bbmin - bbmax) * 0.5f);

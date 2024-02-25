@@ -2,6 +2,7 @@
 
 #include "graphics/camera.h"
 #include "graphics/primitives/voxel-volume.h"
+#include "graphics/primitives/brick-volume.h"
 #include "graphics/light.h"
 #include "graphics/noise/blue.h"
 #include "graphics/skydome.h"
@@ -26,6 +27,7 @@ class Renderer : public TheApp {
     u32 frame = 0u;
 
     unique_ptr<VoxelVolume> volume;
+    // unique_ptr<BrickVolume> volume;
     Camera camera;
     vector<LightSource> lights;
 

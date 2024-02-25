@@ -92,12 +92,12 @@ void main()
 	glfwWindowHint( GLFW_STENCIL_BITS, GL_FALSE );
 	glfwWindowHint( GLFW_RESIZABLE, GL_FALSE /* easier :) */ );
 #ifdef FULLSCREEN
-	window = glfwCreateWindow( WIN_WIDTH, WIN_HEIGHT, "Tmpl8RT", glfwGetPrimaryMonitor(), 0 );
+	window = glfwCreateWindow( WIN_WIDTH, WIN_HEIGHT, "CPU Voxel Ray-tracer", glfwGetPrimaryMonitor(), 0 );
 #else
 #ifdef DOUBLESIZE
-	window = glfwCreateWindow( WIN_WIDTH * 2, WIN_HEIGHT * 2, "Tmpl8RT", 0, 0 );
+	window = glfwCreateWindow( WIN_WIDTH * 2, WIN_HEIGHT * 2, "CPU Voxel Ray-tracer", 0, 0 );
 #else
-	window = glfwCreateWindow( WIN_WIDTH, WIN_HEIGHT, "Tmpl8RT", 0, 0 );
+	window = glfwCreateWindow( WIN_WIDTH, WIN_HEIGHT, "CPU Voxel Ray-tracer", 0, 0 );
 #endif
 #endif
 	if (!window) FatalError( "glfwCreateWindow failed." );

@@ -12,7 +12,7 @@ constexpr f32 DEFAULT_VOXEL_SCALE = 16.0f;
 #define USE_AVX2_GATHER 1
 
 #define USE_BRICKMAP 1
-constexpr u32 BRICK_LEVELS = 3;
+constexpr u32 BRICK_LEVELS = 4;
 constexpr u32 MAX_LEVEL_SIZE = 1u << BRICK_LEVELS;
 //constexpr u32 BRICK_SIZE = 8;
 //constexpr f32 R_BRICK_SIZE = 1.0f / BRICK_SIZE;
@@ -67,7 +67,8 @@ struct VoxelVolume {
 
         /* Generate the highest level of detail */
         f32 rx = 1.0f / 128.0f;
-        for (u32 z = 0; z < size.z; ++z) {
+#pragma omp parallel for schedule(dynamic)
+        for (i32 z = 0; z < size.z; ++z) {
             const f32 fz = (f32)z / 128.0f;
             for (u32 y = 0; y < size.y; ++y) {
                 const f32 fy = (f32)y / 128.0f;

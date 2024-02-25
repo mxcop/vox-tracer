@@ -179,6 +179,7 @@
     <ClCompile Include="lib\imgui\imgui_widgets.cpp" />
     <ClCompile Include="src\graphics\camera.cpp" />
     <ClCompile Include="src\graphics\noise\blue.cpp" />
+    <ClCompile Include="src\graphics\primitives\brick-volume.cpp" />
     <ClCompile Include="src\graphics\primitives\voxel-volume.cpp" />
     <ClCompile Include="src\graphics\skydome.cpp" />
     <ClCompile Include="template\opencl.cpp" />
@@ -206,6 +207,7 @@
     <ClInclude Include="src\graphics\camera.h" />
     <ClInclude Include="src\graphics\light.h" />
     <ClInclude Include="src\graphics\noise\blue.h" />
+    <ClInclude Include="src\graphics\primitives\brick-volume.h" />
     <ClInclude Include="src\graphics\rays\frustum.h" />
     <ClInclude Include="src\graphics\rays\hit.h" />
     <ClInclude Include="src\graphics\primitives\voxel-volume.h" />

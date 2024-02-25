@@ -40,6 +40,7 @@
     <ClCompile Include="src\graphics\camera.cpp" />
     <ClCompile Include="src\graphics\noise\blue.cpp" />
     <ClCompile Include="src\graphics\skydome.cpp" />
+    <ClCompile Include="src\graphics\primitives\brick-volume.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\renderer.h" />
@@ -99,6 +100,7 @@
     <ClInclude Include="lib\ogt\ogt_vox.h" />
     <ClInclude Include="src\graphics\noise\blue.h" />
     <ClInclude Include="src\graphics\skydome.h" />
+    <ClInclude Include="src\graphics\primitives\brick-volume.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template">
