@@ -28,30 +28,38 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     float3 pos = clamp(floorf(p0 * rlod) * lod, float3(0), volume - 1.0f);
     float3 step = ray.sign_dir * lod;
     float3 delta = inv_extend * step;
-    float3 side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
+    float3 side = (pos + fmaxf(step, 0.0f) - p0) * inv_extend;
 
     /* Start traversing */
-    float3 normal = {};
     f32 t = 0.0f;
-    u32 i = 0, j = 0;
-    for (; i < MAX_STEPS; ++i) {
+    u32 j = 0;
+    for (hit.steps; hit.steps < MAX_STEPS; ++hit.steps) {
         const u8 voxel = fetch_voxel(floori(pos * rlod), level);
 
         if (voxel) {
             /* Stop if we hit something in L1 */
             if (level == 0) {
-                /* If we hit on the first step, we have to compute the normal */
-                if (i <= BRICK_LEVELS) {
-                    const float3 c = (bbmin + bbmax) * 0.5f;
-                    const float3 p = (ray.origin + ray.dir * tmin) - c;
-                    const float3 d = fabs((bbmin - bbmax) * 0.5f);
-                    hit.normal = normalize(floorf(p / d * 1.001f));
-                } else {
-                    hit.normal = -normal * step;
-                }
                 hit.depth = tmin + (tmax - tmin) * t;
                 hit.albedo = float3((f32)voxel / 256.0f);
-                hit.steps = i;
+                /* If we hit on the first step, we have to compute the normal */
+                if (hit.steps <= BRICK_LEVELS) {
+                    const float3 p = (ray.origin + ray.dir * tmin);
+                    if (fabs(p.x - bbmin.x) < 0.01f) {
+                        hit.normal = float3(-1, 0, 0);
+                    } else if (fabs(p.x - bbmax.x) < 0.01f) {
+                        hit.normal = float3(1, 0, 0);
+                    } else if (fabs(p.y - bbmin.y) < 0.01f) {
+                        hit.normal = float3(0, -1, 0);
+                    } else if (fabs(p.y - bbmax.y) < 0.01f) {
+                        hit.normal = float3(0, 1, 0);
+                    } else if (fabs(p.z - bbmin.z) < 0.01f) {
+                        hit.normal = float3(0, 0, -1);
+                    } else if (fabs(p.z - bbmax.z) < 0.01f) {
+                        hit.normal = float3(0, 0, 1);
+                    }
+                } else {
+                    hit.normal = -hit.normal * step;
+                }
                 return hit;
             }
             level--, j = 0;
@@ -60,7 +68,8 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             lod *= 0.5f, rlod *= 2.0f;
             step *= 0.5f, delta *= 0.5f;
 
-            pos = clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+            pos =
+                clamp(floorf((p0 + (t) * extend) * rlod) * lod, float3(0), volume - 1.0f);
             side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
             continue;
         }
@@ -73,7 +82,8 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             lod *= 2.0f, rlod *= 0.5f;
             step *= 2.0f, delta *= 2.0f;
 
-            pos = clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+            pos =
+                clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
             side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
             continue;
         }
@@ -83,13 +93,13 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             if (side.x < side.z) {
                 pos.x += step.x;
                 if (pos.x < 0 || pos.x >= volume.x) break;
-                normal = float3(1, 0, 0);
+                hit.normal = float3(1, 0, 0);
                 t = side.x;
                 side.x += delta.x;
             } else {
                 pos.z += step.z;
                 if (pos.z < 0 || pos.z >= volume.z) break;
-                normal = float3(0, 0, 1);
+                hit.normal = float3(0, 0, 1);
                 t = side.z;
                 side.z += delta.z;
             }
@@ -97,13 +107,13 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             if (side.y < side.z) {
                 pos.y += step.y;
                 if (pos.y < 0 || pos.y >= volume.y) break;
-                normal = float3(0, 1, 0);
+                hit.normal = float3(0, 1, 0);
                 t = side.y;
                 side.y += delta.y;
             } else {
                 pos.z += step.z;
                 if (pos.z < 0 || pos.z >= volume.z) break;
-                normal = float3(0, 0, 1);
+                hit.normal = float3(0, 0, 1);
                 t = side.z;
                 side.z += delta.z;
             }
@@ -111,7 +121,6 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     }
 
     hit.depth = BIG_F32;
-    hit.steps = i;
     return hit;
 }
 
@@ -211,7 +220,7 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
         return false;
     }
     tmax = min(tmax, 1.0f);
-    
+
     /* Calculate the ray start, end, and extend */
     const float3 p0 = ((ray.origin + ray.dir * (tmin + 0.0001f)) - bbmin) * scale;
     const float3 p1 = ((ray.origin + ray.dir * (tmax - 0.0001f)) - bbmin) * scale;
@@ -220,10 +229,10 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
     const float3 volume = (bbmax - bbmin) * scale;
 
     /* Exit if the end-point is outside the volume */
-    //if (p1.x < 0 || p1.y < 0 || p1.z < 0 || p1.x > volume.x - 1 || p1.y > volume.y - 1 ||
-    //    p1.z > volume.z - 1) {
-    //    return false;
-    //}
+    // if (p1.x < 0 || p1.y < 0 || p1.z < 0 || p1.x > volume.x - 1 || p1.y > volume.y - 1 ||
+    //     p1.z > volume.z - 1) {
+    //     return false;
+    // }
 
     /* Setup for DDA traversal */
     f32 lod = MAX_LEVEL_SIZE, rlod = 1.0f / MAX_LEVEL_SIZE;

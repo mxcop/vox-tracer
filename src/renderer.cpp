@@ -8,8 +8,9 @@ void Renderer::init() {
         fclose(f);
     }
 
-    accumulator = (float4*)MALLOC64(WIN_WIDTH * WIN_HEIGHT * 16);
-    memset(accumulator, 0, WIN_WIDTH * WIN_HEIGHT * 16);
+    /* ~236 Mb at 720p */
+    accu = (float4*)MALLOC64(WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
+    if (accu) memset(accu, 0, WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
 
     bnoise = BlueNoise();
     skydome = SkyDome("assets/skydome.hdr");
@@ -26,20 +27,33 @@ static float3 sample_hemisphere_weighted(const f32 r1, const f32 r2, const float
     f32 xs = sinf(theta) * cosf(phi);
     f32 ys = cosf(theta);
     f32 zs = sinf(theta) * sinf(phi);
-    float3 h = fabs(n);
+    float3 h = n;
 
-    if ((h.x <= h.y) && (h.x <= h.z)) {
-        h.x = 1.0f;
-    } else if ((h.y <= h.x) && (h.y <= h.z)) {
-        h.y = 1.0f;
+    if ((abs(h.x) <= abs(h.y)) && (abs(h.x) <= abs(h.z))) {
+        h.x = 1.0;
+    } else if ((abs(h.y) <= abs(h.x)) && (abs(h.y) <= abs(h.z))) {
+        h.y = 1.0;
     } else {
-        h.z = 1.0f;
+        h.z = 1.0;
     }
 
     float3 x = normalize(cross(h, n));
     float3 z = normalize(cross(x, n));
 
     return normalize(xs * x + ys * n + zs * z);
+}
+
+float3 sample_hemisphere_uniform(const float3& n) {
+    float3 R;
+    do {
+        R = float3(RandomFloat() * 2 - 1, RandomFloat() * 2 - 1, RandomFloat() * 2 - 1);
+    } while (dot(R, R) > 1.0f);
+    R = normalize(R);
+    if (dot(n, R) < 0.0f) {
+        return -R;
+    } else {
+        return R;
+    }
 }
 
 u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
@@ -57,7 +71,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     }
 
     /* Ambient light */
-#if 0
+#if 1
     /* R2 irrationals */
     const f32 R2 = 1.22074408460575947536f;
     const f32 R2X = 1.0f / R2;
@@ -67,18 +81,21 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     const f32 R2X_2D = 1.0f / R2_2D;
     const f32 R2Y_2D = 1.0f / (R2_2D * R2_2D);
 
-    float3 ambient_light = float3(0.0f);
-    constexpr f32 SAMPLES = 4; 
+    #define CONSINE_SAMPLING 1
+
+    float3 ambient_c = float3(0.0f);
+    constexpr f32 SAMPLES = 1; 
     for (u32 i = 0; i < SAMPLES; i++) {
         /* Generate a random direction */
-#if 0
+#if !CONSINE_SAMPLING
         /* Blue noise + R2 (uniform distribution) */
-        float3 raw_noise = bnoise.sample_3d(x, y);
-        float3 quasi_noise;
-        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)(frame + i), 1.0f);
-        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)(frame + i), 1.0f);
-        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)(frame + i), 1.0f);
-        float3 ambient_dir = normalize(quasi_noise);
+        //float3 raw_noise = bnoise.sample_3d(x, y);
+        //float3 quasi_noise;
+        //quasi_noise.x = fmod(raw_noise.x + R2X * (f32)(frame + i), 1.0f);
+        //quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)(frame + i), 1.0f);
+        //quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)(frame + i), 1.0f);
+        //float3 ambient_dir = normalize(quasi_noise);
+        float3 ambient_dir = sample_hemisphere_uniform(hit.normal);
 #else
         /* Blue noise + R2 (cosine weighted distribution) */
         float2 raw_noise = bnoise.sample_2d(x, y);
@@ -88,32 +105,36 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
 #endif
 
         /* Flip the ambient dir if it's facing the wrong way */
-        if (dot(ambient_dir, hit.normal) < 0.0f) {
-            ambient_dir = -ambient_dir;
-        }
+#if !CONSINE_SAMPLING
+        //if (dot(ambient_dir, hit.normal) < 0.0f) {
+        //    ambient_dir = -ambient_dir;
+        //}
         /* Incidence is already applied by the consine weighted distribution! */
-        const f32 ind = 1.0f; // dot(ambient_dir, hit.normal);
+        const f32 ind = 1;  // dot(ambient_dir, hit.normal);
+#else
+        const f32 ind = 1;
+#endif
 
         /* Shoot the ambient ray */
-        const float3 hit_pos = ray.origin + ray.dir * (hit.depth - 0.01f);
-        const Ray ambient_ray = Ray(hit_pos, ambient_dir * 1000.0f);
+        const float3 hit_pos = ray.origin + (ray.dir * hit.depth) + (hit.normal * 0.00001f);
+        const Ray ambient_ray = Ray(hit_pos + ambient_dir * 1000.0f,
+            hit_pos - (hit_pos + ambient_dir * 1000.0f));  // Ray(hit_pos, ambient_dir * 1000.0f);
         const bool in_shadow = volume->is_occluded(ambient_ray);
 
         if (not in_shadow) {
-            ambient_light += float3(1.0f, 0.98f, 0.92f) * ind;
+            ambient_c += float3(1.0f);
+            color += hit.albedo * (ambient_c / SAMPLES);
         }
     }
 
-    color += hit.albedo * (ambient_light / SAMPLES);
-
-    return RGBF32_to_RGB8(&color);
 #endif
 
     for (const LightSource& light : lights) {
         /* Compute a shadow ray */
         const float3 shadow_pos = ray.origin + ray.dir * (hit.depth - 0.001f);
 
-        #if 0
+        #if 1
+        /* Jitter light position (soft shadows) */
         float3 raw_noise = bnoise.sample_3d(x, y);
         u32 frame_offset = frame % 128u;
         float3 quasi_noise;
@@ -152,11 +173,15 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
         }
     }
     #else
-    //color = float4(hit.normal, 1.0f);
+    color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
     //color = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
     //color = float4(hit.albedo, 1.0f);
-    color = float4(hit.steps / 64.0f, hit.steps / 64.0f, hit.steps / 64.0f, 1.0f);
+    //color = float4(hit.steps / 64.0f, hit.steps / 64.0f, hit.steps / 64.0f, 1.0f);
     #endif
+
+    /* Update accumulator */
+    accu[x + y * WIN_WIDTH] += color;
+    color = accu[x + y * WIN_WIDTH] / (f32)accu_len;
 
     return RGBF32_to_RGB8(&color);
 }
@@ -235,10 +260,14 @@ void Renderer::tick(f32 dt) {
     }
 #endif
 
+    accu_len++;
     frame_time = t.elapsed();
 
     /* Update the camera */
-    camera.update(dt);
+    if (camera.update(dt)) {
+        accu_len = 1u;
+        memset(accu, 0, WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
+    }
 }
 
 void Renderer::gui(f32 dt) {

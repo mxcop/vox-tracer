@@ -34,5 +34,7 @@ class Renderer : public TheApp {
     BlueNoise bnoise;
     SkyDome skydome;
 
-    float4* accumulator = nullptr;
+    /* Accumulator */
+    float4* accu = nullptr;
+    mutable u32 accu_len = 1u;
 };
