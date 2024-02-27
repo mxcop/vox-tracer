@@ -101,6 +101,7 @@
     <ClInclude Include="src\graphics\noise\blue.h" />
     <ClInclude Include="src\graphics\skydome.h" />
     <ClInclude Include="src\graphics\primitives\brick-volume.h" />
+    <ClInclude Include="src\graphics\tonemap.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template">

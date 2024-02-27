@@ -20,6 +20,7 @@ static inline f32 _max(const f32 a, const f32 b) { return a > b ? a : b; };
 #define INVPI		0.31830988618379067153777f
 #define INV2PI		0.15915494309189533576888f
 #define TWOPI		6.28318530717958647692528f
+#define FOURPI      12.5663706144f
 #define SQRT_PI_INV	0.56418958355f
 #define LARGE_FLOAT	1e34f
 

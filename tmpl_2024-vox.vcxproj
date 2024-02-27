@@ -214,6 +214,7 @@
     <ClInclude Include="src\graphics\rays\packet.h" />
     <ClInclude Include="src\graphics\rays\ray.h" />
     <ClInclude Include="src\graphics\skydome.h" />
+    <ClInclude Include="src\graphics\tonemap.h" />
     <ClInclude Include="src\morton.h" />
     <ClInclude Include="src\simd.h" />
     <ClInclude Include="template\common.h" />

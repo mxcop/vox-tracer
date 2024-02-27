@@ -25,9 +25,10 @@ class Renderer : public TheApp {
     int2 mousePos;
     f32 frame_time = 1.0f;
     u32 frame = 0u;
+    float3 sun_dir = {-0.619501f, 0.465931f, -0.631765f};
 
     unique_ptr<VoxelVolume> volume;
-    // unique_ptr<BrickVolume> volume;
+    //unique_ptr<BrickVolume> volume;
     Camera camera;
     vector<LightSource> lights;
 

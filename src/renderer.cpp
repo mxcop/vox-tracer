@@ -1,4 +1,20 @@
 #include <functional>
+#include <graphics/tonemap.h>
+
+void printb(u64 u) {
+    for (int i = 63; i >= 0; i--) {
+        if ((i + 1) % 8 == 0) printf("_");
+        printf("%i", (u & ((u64)1u << i)) ? 1 : 0);
+    }
+    printf("\n");
+}
+void printb(u32 u) {
+    for (int i = 0; i < 32; i++) {
+        if (i % 8 == 0) printf("_");
+        printf("%i", u & (1 << i) ? 1 : 0);
+    }
+    printf("\n");
+}
 
 void Renderer::init() {
     /* Try load the camera settings */
@@ -13,11 +29,11 @@ void Renderer::init() {
     if (accu) memset(accu, 0, WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
 
     bnoise = BlueNoise();
-    skydome = SkyDome("assets/skydome.hdr");
+    skydome = SkyDome("assets/kiara_1_dawn_8k.hdr");
 
     /* Create a voxel volume */
     volume = make_unique<VoxelVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
-    // volume = make_unique<BrickVolume>(float3(0.0f, 0.0f, 0.0f), int3(2048, 2048, 2048));
+    //volume = make_unique<BrickVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
 }
 
 /* Source : <https://github.com/tqjxlm/Monte-Carlo-Ray-Tracer> */
@@ -61,8 +77,8 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
 
     float4 color = float4(0);
 
-    /* Point & spot lights */
-    #if 1
+/* Point & spot lights */
+#if 1
     /* Skybox color if the ray missed */
     if (hit.depth >= BIG_F32) {
         color = skydome.sample_dir(ray.dir);
@@ -70,8 +86,8 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
         // return 0xFF101010;
     }
 
-    /* Ambient light */
-#if 1
+    const float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.00001f;
+
     /* R2 irrationals */
     const f32 R2 = 1.22074408460575947536f;
     const f32 R2X = 1.0f / R2;
@@ -81,73 +97,96 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     const f32 R2X_2D = 1.0f / R2_2D;
     const f32 R2Y_2D = 1.0f / (R2_2D * R2_2D);
 
-    #define CONSINE_SAMPLING 1
+    /* Ambient light */
+#if 1
+    
+#define CONSINE_SAMPLING 1
 
     float3 ambient_c = float3(0.0f);
-    constexpr f32 SAMPLES = 1; 
+    constexpr f32 SAMPLES = 1;
     for (u32 i = 0; i < SAMPLES; i++) {
         /* Generate a random direction */
-#if !CONSINE_SAMPLING
-        /* Blue noise + R2 (uniform distribution) */
-        //float3 raw_noise = bnoise.sample_3d(x, y);
-        //float3 quasi_noise;
-        //quasi_noise.x = fmod(raw_noise.x + R2X * (f32)(frame + i), 1.0f);
-        //quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)(frame + i), 1.0f);
-        //quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)(frame + i), 1.0f);
-        //float3 ambient_dir = normalize(quasi_noise);
-        float3 ambient_dir = sample_hemisphere_uniform(hit.normal);
-#else
+#if CONSINE_SAMPLING
         /* Blue noise + R2 (cosine weighted distribution) */
-        float2 raw_noise = bnoise.sample_2d(x, y);
-        f32 quasi_x = fmod(raw_noise.x + R2X_2D * (f32)(frame + i), 1.0f);
-        f32 quasi_y = fmod(raw_noise.y + R2Y_2D * (f32)(frame + i), 1.0f);
-        float3 ambient_dir = sample_hemisphere_weighted(quasi_x, quasi_y, hit.normal);
-#endif
-
-        /* Flip the ambient dir if it's facing the wrong way */
-#if !CONSINE_SAMPLING
-        //if (dot(ambient_dir, hit.normal) < 0.0f) {
-        //    ambient_dir = -ambient_dir;
-        //}
-        /* Incidence is already applied by the consine weighted distribution! */
-        const f32 ind = 1;  // dot(ambient_dir, hit.normal);
+        const float2 raw_noise = bnoise.sample_2d(x, y);
+        const f32 quasi_x = fmod(raw_noise.x + R2X_2D * (f32)(frame + i), 1.0f);
+        const f32 quasi_y = fmod(raw_noise.y + R2Y_2D * (f32)(frame + i), 1.0f);
+        const float3 ambient_dir = sample_hemisphere_weighted(quasi_x, quasi_y, hit.normal);
 #else
-        const f32 ind = 1;
+        /* Blue noise + R2 (uniform distribution) */
+        // float3 raw_noise = bnoise.sample_3d(x, y);
+        // float3 quasi_noise;
+        // quasi_noise.x = fmod(raw_noise.x + R2X * (f32)(frame + i), 1.0f);
+        // quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)(frame + i), 1.0f);
+        // quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)(frame + i), 1.0f);
+        // float3 ambient_dir = normalize(quasi_noise);
+        float3 ambient_dir = sample_hemisphere_uniform(hit.normal);
 #endif
 
         /* Shoot the ambient ray */
-        const float3 hit_pos = ray.origin + (ray.dir * hit.depth) + (hit.normal * 0.00001f);
-        const Ray ambient_ray = Ray(hit_pos + ambient_dir * 1000.0f,
-            hit_pos - (hit_pos + ambient_dir * 1000.0f));  // Ray(hit_pos, ambient_dir * 1000.0f);
+        const Ray ambient_ray = Ray(hit_pos, ambient_dir * 32.0f);
         const bool in_shadow = volume->is_occluded(ambient_ray);
 
         if (not in_shadow) {
-            ambient_c += float3(1.0f);
-            color += hit.albedo * (ambient_c / SAMPLES);
+            /* Multiply by 2 Pi because the area we're integrating is 2 Pi */
+            const float3 sample = skydome.sample_dir(ambient_dir);
+            ambient_c += (sample * TWOPI);
         }
     }
+    /* Divide by the number of samples */
+    color += hit.albedo * (ambient_c * (1.0f / SAMPLES));
+    // color += ambient_c * 0.05f; /* TODO: remove this */
 
 #endif
 
-    for (const LightSource& light : lights) {
-        /* Compute a shadow ray */
-        const float3 shadow_pos = ray.origin + ray.dir * (hit.depth - 0.001f);
-
-        #if 1
+    /* Directional light */
+    for (u32 i = 0; i < 1; i++) {
         /* Jitter light position (soft shadows) */
+        const f32 JITTER_DIAMETER = 6.0f / 16.0f;
+        const f32 JITTER_RADIUS = JITTER_DIAMETER * 0.5f;
+
         float3 raw_noise = bnoise.sample_3d(x, y);
         u32 frame_offset = frame % 128u;
         float3 quasi_noise;
         quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame_offset, 1.0f);
         quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame_offset, 1.0f);
         quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame_offset, 1.0f);
-        const float3 light_pos = light.origin + (quasi_noise * 0.05f - 0.025f);
-        #else
-        const float3 light_pos = light.origin;
-        #endif
+        const float3 jitter = (quasi_noise * JITTER_DIAMETER - JITTER_RADIUS);
+        const float3 sun_dirj = normalize(sun_dir + jitter);
 
-        const f32 light_dist = length(light_pos - shadow_pos);
-        const float3 light_dir = (light_pos - shadow_pos) / light_dist;
+        /* Do nothing if the normal faces away from the light */
+        f32 incidence = dot(hit.normal, sun_dirj);
+        if (incidence <= 0.0f) continue;
+
+        /* Shoot shadow ray */
+        const Ray shadow_ray = Ray(hit_pos, sun_dirj * 32.0f);
+        const bool in_shadow = volume->is_occluded(shadow_ray);
+
+        if (not in_shadow) {
+            const float3 sun_light = float3(3.0f, 2.5f, 2.0f);
+            color += hit.albedo * sun_light * incidence;
+        }
+    }
+
+    for (const LightSource& light : lights) {
+#if 1
+        /* Jitter light position (soft shadows) */
+        const f32 JITTER_DIAMETER = 3.0f / 16.0f;
+        const f32 JITTER_RADIUS = JITTER_DIAMETER * 0.5f;
+
+        float3 raw_noise = bnoise.sample_3d(x, y);
+        u32 frame_offset = frame % 128u;
+        float3 quasi_noise;
+        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame_offset, 1.0f);
+        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame_offset, 1.0f);
+        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame_offset, 1.0f);
+        const float3 light_pos = light.origin + (quasi_noise * JITTER_DIAMETER - JITTER_RADIUS);
+#else
+        const float3 light_pos = light.origin;
+#endif
+
+        const f32 light_dist = length(light_pos - hit_pos);
+        const float3 light_dir = (light_pos - hit_pos) / light_dist;
 
         /* Do nothing if the normal faces away from the light */
         f32 incidence = dot(hit.normal, light_dir);
@@ -160,27 +199,26 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
             incidence *= 1.0f - (a / light.aperture);
         }
 
-        /* Do nothing if outside the AOE of the light */
+        const Ray shadow_ray = Ray(light_pos, hit_pos - light_pos);
+        const bool in_shadow = volume->is_occluded(shadow_ray);
+
+        /* Do nothing if the point is in shadow */
+        if (in_shadow) continue;
         const f32 sqd = light_dist * light_dist;
-        if (sqd < (8.0f * 8.0f)) {
-            const Ray shadow_ray = Ray(light_pos, shadow_pos - light_pos);
-            const bool in_shadow = volume->is_occluded(shadow_ray);
 
-            /* Do nothing if the point is in shadow */
-            if (in_shadow) continue;
-
-            color += hit.albedo * light.light * incidence / (sqd * 0.2f);
-        }
+        /* Area contribution */
+        const float3 area_c = light.light * JITTER_DIAMETER;
+        color += hit.albedo * area_c * incidence / sqd;
     }
-    #else
-    color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
-    //color = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
-    //color = float4(hit.albedo, 1.0f);
-    //color = float4(hit.steps / 64.0f, hit.steps / 64.0f, hit.steps / 64.0f, 1.0f);
-    #endif
+#else
+     //color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
+    // color = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
+     //color = float4(hit.albedo, 1.0f);
+    // color = float4(hit.steps / 64.0f, hit.steps / 64.0f, hit.steps / 64.0f, 1.0f);
+#endif
 
     /* Update accumulator */
-    accu[x + y * WIN_WIDTH] += color;
+    accu[x + y * WIN_WIDTH] += aces_approx(color);
     color = accu[x + y * WIN_WIDTH] / (f32)accu_len;
 
     return RGBF32_to_RGB8(&color);
@@ -216,7 +254,7 @@ void Renderer::tick(f32 dt) {
         }
     }
 #elif 0
-    constexpr u32 TILE_SIZE = 16; // 7.7M rays/s
+    constexpr u32 TILE_SIZE = 16;  // 7.7M rays/s
 #pragma omp parallel for schedule(dynamic)
     for (i32 y = 0; y < WIN_HEIGHT; y += TILE_SIZE) {
         for (u32 x = 0; x < WIN_WIDTH; x += TILE_SIZE) {
@@ -304,6 +342,9 @@ void Renderer::gui(f32 dt) {
     if (ImGui::Begin("Debug window")) {
         ImGui::Text("Debug options\n");
         ImGui::Separator();
+        //ImGui::InputFloat3("Cam dir", camera.target.cell);
+        //ImGui::DragFloat3("Sun", &sun_dir.x, 0.01f, -1.0f, 1.0f);
+        ImGui::Separator();
         ImGui::SliderFloat("Aperture", &aperture, 0, 1);
         ImGui::Separator();
         ImGui::ColorPicker3("New light", &light_color.x);
@@ -313,7 +354,7 @@ void Renderer::gui(f32 dt) {
     static bool q_down = false;
     if (IsKeyDown(GLFW_KEY_Q) && q_down == false) {
         lights.emplace_back(camera.pos, normalize(camera.target - camera.pos), aperture,
-                            light_color);
+                            light_color * 8.0f);
         q_down = true;
     }
     if (!IsKeyDown(GLFW_KEY_Q) && q_down == true) {
