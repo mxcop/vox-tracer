@@ -65,8 +65,8 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             level--, j = 0;
 
             /* Move down one level */
-            lod *= 0.5f, rlod *= 2.0f;
-            step *= 0.5f, delta *= 0.5f;
+            lod *= BRICK_LEVEL_REC[level], rlod *= BRICK_LEVEL_MUL[level];
+            step *= BRICK_LEVEL_REC[level], delta *= BRICK_LEVEL_REC[level];
 
             pos =
                 clamp(floorf((p0 + (t) * extend) * rlod) * lod, float3(0), volume - 1.0f);
@@ -79,8 +79,8 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             level++, j = 0;
 
             /* Move up one level */
-            lod *= 2.0f, rlod *= 0.5f;
-            step *= 2.0f, delta *= 2.0f;
+            lod *= BRICK_LEVEL_MUL[level - 1], rlod *= BRICK_LEVEL_REC[level - 1];
+            step *= BRICK_LEVEL_MUL[level - 1], delta *= BRICK_LEVEL_MUL[level - 1];
 
             pos =
                 clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
@@ -121,6 +121,7 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     }
 
     hit.depth = BIG_F32;
+    hit.normal = float3(0);
     return hit;
 }
 
@@ -216,7 +217,7 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
     f32 tmin, tmax;
     ray_vs_aabb(ray, tmin, tmax);
     // tmax = min(tmax, 1.0f);
-    if (tmin > tmax || tmin > 1.0f) {
+    if (tmin > tmax - 0.01f || tmin > 1.0f) {
         return false;
     }
     tmax = min(tmax, 1.0f);
@@ -256,8 +257,8 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
             level--, j = 0;
 
             /* Move down one level */
-            lod *= 0.5f, rlod *= 2.0f;
-            step *= 0.5f, delta *= 0.5f;
+            lod *= BRICK_LEVEL_REC[level], rlod *= BRICK_LEVEL_MUL[level];
+            step *= BRICK_LEVEL_REC[level], delta *= BRICK_LEVEL_REC[level];
 
             pos =
                 clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
@@ -270,8 +271,8 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
             level++, j = 0;
 
             /* Move up one level */
-            lod *= 2.0f, rlod *= 0.5f;
-            step *= 2.0f, delta *= 2.0f;
+            lod *= BRICK_LEVEL_MUL[level - 1], rlod *= BRICK_LEVEL_REC[level - 1];
+            step *= BRICK_LEVEL_MUL[level - 1], delta *= BRICK_LEVEL_MUL[level - 1];
 
             pos =
                 clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);

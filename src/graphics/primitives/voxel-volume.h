@@ -12,10 +12,12 @@ constexpr f32 DEFAULT_VOXEL_SCALE = 16.0f;
 #define USE_AVX2_GATHER 1
 
 #define USE_BRICKMAP 1
-constexpr u32 BRICK_LEVELS = 4;
-constexpr u32 MAX_LEVEL_SIZE = 1u << BRICK_LEVELS;
-//constexpr u32 BRICK_SIZE = 8;
-//constexpr f32 R_BRICK_SIZE = 1.0f / BRICK_SIZE;
+constexpr u32 BRICK_LEVELS = 3;
+constexpr f32 BRICK_LEVEL_MUL[BRICK_LEVELS] = {2.0f, 2.0f, 4.0f};
+constexpr f32 BRICK_LEVEL_REC[BRICK_LEVELS] = {0.5f, 0.5f, 0.25f};
+constexpr u32 MAX_LEVEL_SIZE = 16;  // 1u << BRICK_LEVELS;
+// constexpr u32 BRICK_SIZE = 8;
+// constexpr f32 R_BRICK_SIZE = 1.0f / BRICK_SIZE;
 
 struct VoxelVolume {
     f32 scale = DEFAULT_VOXEL_SCALE;
@@ -41,8 +43,8 @@ struct VoxelVolume {
             f32 _;
         };
     };
+    // TODO: Change from vector[] to u8**!
     std::vector<u8> voxels[BRICK_LEVELS + 1];
-    //std::vector<u8> bricks;
 
     VoxelVolume() = default;
     /**
@@ -58,11 +60,14 @@ struct VoxelVolume {
 #else
         u32 bytes = size.x * size.y * size.z;
 #endif
-        for (u32 i = 0; i < BRICK_LEVELS + 1; i++) {
-            const u32 scale = 1u << i;
+        voxels[0] = std::vector<u8>();
+        voxels[0].resize(bytes);
+
+        for (u32 i = 0, scale = 1; i < BRICK_LEVELS; i++) {
+            scale *= BRICK_LEVEL_MUL[i];
             const u32 size = (scale * scale * scale);
-            voxels[i] = std::vector<u8>();
-            voxels[i].resize(bytes / size);
+            voxels[i + 1] = std::vector<u8>();
+            voxels[i + 1].resize(bytes / size);
         }
 
         /* Generate the highest level of detail */
@@ -88,23 +93,21 @@ struct VoxelVolume {
 
         int3 bsize = size;
         for (u32 b = 0; b < BRICK_LEVELS; b++) {
+            const f32 bmul = BRICK_LEVEL_MUL[b];
             /* See if this brick is solid or not */
-            for (u32 z = 0; z < bsize.z; z += 2) {
-                for (u32 y = 0; y < bsize.y; y += 2) {
-                    for (u32 x = 0; x < bsize.x; x += 2) {
+            for (u32 z = 0; z < bsize.z; z += bmul) {
+                for (u32 y = 0; y < bsize.y; y += bmul) {
+                    for (u32 x = 0; x < bsize.x; x += bmul) {
 #if USE_MORTON
-                        const u8 v1 = voxels[b][morton_encode(x, y, z)];
-                        const u8 v2 = voxels[b][morton_encode(x + 1, y, z)];
-                        const u8 v3 = voxels[b][morton_encode(x, y + 1, z)];
-                        const u8 v4 = voxels[b][morton_encode(x, y, z + 1)];
-
-                        const u8 v5 = voxels[b][morton_encode(x + 1, y + 1, z + 1)];
-                        const u8 v6 = voxels[b][morton_encode(x + 1, y + 1, z)];
-                        const u8 v7 = voxels[b][morton_encode(x, y + 1, z + 1)];
-                        const u8 v8 = voxels[b][morton_encode(x + 1, y, z + 1)];
-
-                        if (v1 || v2 || v3 || v4 || v5 || v6 || v7 || v8) {
-                            voxels[b + 1][morton_encode(x / 2, y / 2, z / 2)] = 0xFF;
+                        for (u32 bz = 0; bz < bmul; bz++) {
+                            for (u32 by = 0; by < bmul; by++) {
+                                for (u32 bx = 0; bx < bmul; bx++) {
+                                    voxels[b + 1][morton_encode(x * BRICK_LEVEL_REC[b],
+                                                                y * BRICK_LEVEL_REC[b],
+                                                                z * BRICK_LEVEL_REC[b])] |=
+                                        voxels[b][morton_encode(x + bx, y + by, z + bz)];
+                                }
+                            }
                         }
 #else
                         // TODO: this stuff here...
@@ -114,10 +117,10 @@ struct VoxelVolume {
                 }
             }
 
-            bsize = int3(bsize.x / 2, bsize.y / 2, bsize.z / 2); /* 2, 4, 8, 16 */
+            bsize = floori(float3(bsize) * BRICK_LEVEL_REC[b]); /* 2, 4, 8, 16 */
         }
 
-        #if 0
+#if 0
         u32 brick_indices[BRICK_LEVELS] = {};
         for (u32 i = 0; i < BRICK_LEVELS + 1; i++) {
             const u32 scale = 1u << i;
@@ -160,75 +163,77 @@ struct VoxelVolume {
                 }
             }
         }
-        #endif
+#endif
 
-        //#if USE_BRICKMAP
-//        voxels[1] = std::vector<u8>();
-//        voxels[1].resize(bytes / (BRICK_SIZE * BRICK_SIZE * BRICK_SIZE));
-//
-//        float3 bsize = size / BRICK_SIZE;
-//
-//        f32 rx = 1.0f / 128.0f;
-//        for (u32 z = 0; z < size.z; z += BRICK_SIZE) {
-//            for (u32 y = 0; y < size.y; y += BRICK_SIZE) {
-//                for (u32 x = 0; x < size.x; x += BRICK_SIZE) {
-//                    u8 brick = 0x00;
-//                    for (u32 bz = 0; bz < BRICK_SIZE; bz++) {
-//                        for (u32 by = 0; by < BRICK_SIZE; by++) {
-//                            for (u32 bx = 0; bx < BRICK_SIZE; bx++) {
-//                                const f32 fx = (f32)(x + bx) / 128.0f;
-//                                const f32 fy = (f32)(y + by) / 128.0f;
-//                                const f32 fz = (f32)(z + bz) / 128.0f;
-//                                const f32 noise = noise3D(fx, fy, fz);
-//
-//#if USE_MORTON
-//                                const u64 i = morton_encode((x + bx), (y + by), (z + bz));
-//#else
-//                                const u64 i =
-//                                    ((z + bz) * size.x * size.y) + ((y + by) * size.x) + (x + bx);
-//#endif
-//                                if (noise > 0.09f) {
-//                                    brick = 0xFF; /* brick contains at least 1 voxel */
-//
-//                                    const f32 color =
-//                                        noise3D(fx * 8.0f, fy * 8.0f, fz * 8.0f) + .5f;
-//                                    voxels[0][i] = color * 0xFF;
-//                                } else {
-//                                    voxels[0][i] = 0x00;
-//                                }
-//                            }
-//                        }
-//                    }
-//#if USE_MORTON
-//                    const u64 i = morton_encode(x / BRICK_SIZE, y / BRICK_SIZE, z / BRICK_SIZE);
-//#else
-//                    const u64 i = ((z / BRICK_SIZE) * bsize.x * bsize.y) +
-//                                  ((y / BRICK_SIZE) * bsize.x) + (x / BRICK_SIZE);
-//#endif
-//                    voxels[1][i] = brick;
-//                }
-//            }
-//        }
-//#else
-//        f32 rx = 1.0f / 128.0f;
-//        for (u32 z = 0; z < size.z; ++z) {
-//            const f32 fz = (f32)z / 128.0f;
-//            for (u32 y = 0; y < size.y; ++y) {
-//                const f32 fy = (f32)y / 128.0f;
-//                f32 fx = 0;
-//                for (u32 x = 0; x < size.x; ++x, fx += rx) {
-//                    const f32 noise = noise3D(fx, fy, fz);
-//                    const f32 noise2 = noise3D(fx * 8.0f, fy * 8.0f, fz * 8.0f) + .5f;
-//#if USE_MORTON
-//                    const u64 i = morton_encode(x, y, z);
-//#else
-//                    const u64 i = (z * size.x * size.y) + (y * size.x) + x;
-//#endif
-//                    voxels[i] = noise > 0.09f ? (noise2 * 0xFF) : 0x00;
-//                }
-//            }
-//        }
-//#endif
+        // #if USE_BRICKMAP
+        //        voxels[1] = std::vector<u8>();
+        //        voxels[1].resize(bytes / (BRICK_SIZE * BRICK_SIZE * BRICK_SIZE));
+        //
+        //        float3 bsize = size / BRICK_SIZE;
+        //
+        //        f32 rx = 1.0f / 128.0f;
+        //        for (u32 z = 0; z < size.z; z += BRICK_SIZE) {
+        //            for (u32 y = 0; y < size.y; y += BRICK_SIZE) {
+        //                for (u32 x = 0; x < size.x; x += BRICK_SIZE) {
+        //                    u8 brick = 0x00;
+        //                    for (u32 bz = 0; bz < BRICK_SIZE; bz++) {
+        //                        for (u32 by = 0; by < BRICK_SIZE; by++) {
+        //                            for (u32 bx = 0; bx < BRICK_SIZE; bx++) {
+        //                                const f32 fx = (f32)(x + bx) / 128.0f;
+        //                                const f32 fy = (f32)(y + by) / 128.0f;
+        //                                const f32 fz = (f32)(z + bz) / 128.0f;
+        //                                const f32 noise = noise3D(fx, fy, fz);
+        //
+        // #if USE_MORTON
+        //                                const u64 i = morton_encode((x + bx), (y + by), (z + bz));
+        // #else
+        //                                const u64 i =
+        //                                    ((z + bz) * size.x * size.y) + ((y + by) * size.x) +
+        //                                    (x + bx);
+        // #endif
+        //                                if (noise > 0.09f) {
+        //                                    brick = 0xFF; /* brick contains at least 1 voxel */
+        //
+        //                                    const f32 color =
+        //                                        noise3D(fx * 8.0f, fy * 8.0f, fz * 8.0f) + .5f;
+        //                                    voxels[0][i] = color * 0xFF;
+        //                                } else {
+        //                                    voxels[0][i] = 0x00;
+        //                                }
+        //                            }
+        //                        }
+        //                    }
+        // #if USE_MORTON
+        //                    const u64 i = morton_encode(x / BRICK_SIZE, y / BRICK_SIZE, z /
+        //                    BRICK_SIZE);
+        // #else
+        //                    const u64 i = ((z / BRICK_SIZE) * bsize.x * bsize.y) +
+        //                                  ((y / BRICK_SIZE) * bsize.x) + (x / BRICK_SIZE);
+        // #endif
+        //                    voxels[1][i] = brick;
+        //                }
+        //            }
+        //        }
+        // #else
+        //        f32 rx = 1.0f / 128.0f;
+        //        for (u32 z = 0; z < size.z; ++z) {
+        //            const f32 fz = (f32)z / 128.0f;
+        //            for (u32 y = 0; y < size.y; ++y) {
+        //                const f32 fy = (f32)y / 128.0f;
+        //                f32 fx = 0;
+        //                for (u32 x = 0; x < size.x; ++x, fx += rx) {
+        //                    const f32 noise = noise3D(fx, fy, fz);
+        //                    const f32 noise2 = noise3D(fx * 8.0f, fy * 8.0f, fz * 8.0f) + .5f;
+        // #if USE_MORTON
+        //                    const u64 i = morton_encode(x, y, z);
+        // #else
+        //                    const u64 i = (z * size.x * size.y) + (y * size.x) + x;
+        // #endif
+        //                    voxels[i] = noise > 0.09f ? (noise2 * 0xFF) : 0x00;
+        //                }
+        //            }
+        //        }
+        // #endif
     }
 
     /**
@@ -331,15 +336,15 @@ struct VoxelVolume {
     }
 
     /* Fetch a brick from this volumes brick data. */
-//    __forceinline u8 fetch_brick(const int3& idx) const {
-//#if USE_MORTON
-//        const u64 i = morton_encode(idx.x, idx.y, idx.z);
-//#else
-//        const float3 size = voxel_size / BRICK_SIZE;
-//        size_t i = ((size_t)idx.z * size.x * size.y) + ((size_t)idx.y * size.x) + idx.x;
-//#endif
-//        return bricks[0][i];
-//    }
+    //    __forceinline u8 fetch_brick(const int3& idx) const {
+    // #if USE_MORTON
+    //        const u64 i = morton_encode(idx.x, idx.y, idx.z);
+    // #else
+    //        const float3 size = voxel_size / BRICK_SIZE;
+    //        size_t i = ((size_t)idx.z * size.x * size.y) + ((size_t)idx.y * size.x) + idx.x;
+    // #endif
+    //        return bricks[0][i];
+    //    }
 
     /* Fetch 4 voxels using the indices inside an SSE register. */
     __forceinline i128 fetch_voxels(const i128 indices) const {
