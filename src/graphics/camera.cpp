@@ -10,6 +10,7 @@ bool Camera::update(const f32 t) {
     float3 up = normalize(cross(ahead, right));
 
     bool changed = false;
+    speed = speed * (IsKeyDown(GLFW_KEY_LEFT_CONTROL) ? 4.0f : 1.0f);
     /* Apply any user inputs */
     if (IsKeyDown(GLFW_KEY_A)) pos -= speed * 4 * right, changed = true;
     if (IsKeyDown(GLFW_KEY_D)) pos += speed * 4 * right, changed = true;
