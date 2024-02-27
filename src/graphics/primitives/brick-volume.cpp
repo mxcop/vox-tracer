@@ -22,10 +22,10 @@ BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
             //brick.brick_index = i;
 
             /* Randomly assign voxels */
-            for (u16 i = 0; i < 64; i++) {
+            for (i16 i = 0; i < 64; i++) {
                 brick.packets[i] = 0u;
                 for (u8 b = 0; b < 8; b++) {
-                    if (RandomFloat(seed2) < 0.5f) {
+                    if (RandomFloat(seed2) < 0.3f) {
                         brick.packets[i] |= (0b1 << b);
                         brick.popcnt++;
                     }
