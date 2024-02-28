@@ -24,7 +24,7 @@ void Renderer::init() {
         fclose(f);
     }
 
-    /* ~236 Mb at 720p */
+    /* Create the accumulator */
     accu = (float4*)MALLOC64(WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
     if (accu) memset(accu, 0, WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
 
@@ -32,8 +32,8 @@ void Renderer::init() {
     skydome = SkyDome("assets/kiara_1_dawn_8k.hdr");
 
     /* Create a voxel volume */
-    volume = make_unique<VoxelVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
-    //volume = make_unique<BrickVolume>(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
+    //volume = new VoxelVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
+    volume = new BrickVolume(float3(0.0f, 0.0f, 0.0f), int3(2048, 2048, 2048));
 }
 
 /* Source : <https://github.com/tqjxlm/Monte-Carlo-Ray-Tracer> */
@@ -78,7 +78,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     float4 color = float4(0);
 
 /* Point & spot lights */
-#if 1
+#if 0
     /* Skybox color if the ray missed */
     if (hit.depth >= BIG_F32) {
         color = skydome.sample_dir(ray.dir);
@@ -86,7 +86,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
         // return 0xFF101010;
     }
 
-    const float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.00001f;
+    const float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.0001f;
 
     /* R2 irrationals */
     const f32 R2 = 1.22074408460575947536f;
@@ -211,10 +211,11 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
         color += hit.albedo * area_c * incidence / sqd;
     }
 #else
-     //color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
-    // color = float4(hit.depth * 0.025f, hit.depth * 0.025f, hit.depth * 0.025f, 1.0f);
+     color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
+    //color = float4(hit.depth / 8.0f, hit.depth / 8.0f, hit.depth / 8.0f, 1.0f);
      //color = float4(hit.albedo, 1.0f);
     // color = float4(hit.steps / 64.0f, hit.steps / 64.0f, hit.steps / 64.0f, 1.0f);
+     return RGBF32_to_RGB8(&color);
 #endif
 
     /* Update accumulator */
@@ -244,7 +245,7 @@ void Renderer::tick(f32 dt) {
             }
         }
     }
-#elif 1
+#elif 0
 #pragma omp parallel for schedule(dynamic)
     for (i32 y = 0; y < WIN_HEIGHT; ++y) {
         for (i32 x = 0; x < WIN_WIDTH; ++x) {
@@ -253,7 +254,7 @@ void Renderer::tick(f32 dt) {
             screen->pixels[x + y * WIN_WIDTH] = color;
         }
     }
-#elif 0
+#elif 1
     constexpr u32 TILE_SIZE = 16;  // 7.7M rays/s
 #pragma omp parallel for schedule(dynamic)
     for (i32 y = 0; y < WIN_HEIGHT; y += TILE_SIZE) {
@@ -263,7 +264,7 @@ void Renderer::tick(f32 dt) {
                 for (u32 u = 0; u < TILE_SIZE; ++u) {
                     u32 xu = x + u;
                     Ray ray = camera.get_primary_ray(xu, yv);
-                    u32 color = trace(ray);
+                    u32 color = trace(ray, xu, yv);
                     screen->pixels[xu + yv * WIN_WIDTH] = color;
                 }
             }

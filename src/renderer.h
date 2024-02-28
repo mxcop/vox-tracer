@@ -27,8 +27,8 @@ class Renderer : public TheApp {
     u32 frame = 0u;
     float3 sun_dir = {-0.619501f, 0.465931f, -0.631765f};
 
-    unique_ptr<VoxelVolume> volume;
-    //unique_ptr<BrickVolume> volume;
+    //VoxelVolume* volume = nullptr;
+    BrickVolume* volume = nullptr;
     Camera camera;
     vector<LightSource> lights;
 

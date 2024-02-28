@@ -18,6 +18,7 @@ bool Camera::update(const f32 t) {
     if (IsKeyDown(GLFW_KEY_S)) pos -= speed * 4 * ahead, changed = true;
     if (IsKeyDown(GLFW_KEY_SPACE)) pos += speed * 4 * up, changed = true;
     if (IsKeyDown(GLFW_KEY_LEFT_SHIFT)) pos -= speed * 4 * up, changed = true;
+    speed = speed / (IsKeyDown(GLFW_KEY_LEFT_CONTROL) ? 4.0f : 1.0f);
     target = pos + ahead;
     if (IsKeyDown(GLFW_KEY_UP)) target += speed * up, changed = true;
     if (IsKeyDown(GLFW_KEY_DOWN)) target -= speed * up, changed = true;

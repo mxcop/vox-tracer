@@ -70,7 +70,7 @@ struct Camera {
         //const f128 xm = _mm_set_ps(x, x + 1, x, x + 1), ym = _mm_set_ps(y, y, y + 1, y + 1);
         //const f128 um = _mm_mul_ps(xm, _mm_set_ps1(1.0f / WIN_WIDTH));
         //const f128 vm = _mm_mul_ps(ym, _mm_set_ps1(1.0f / WIN_HEIGHT));
-
+        
         /* Bundle of 4 x 3D vectors */
         QuadBundle bundle = {};
         bundle.v1 = get_primary_ray(x, y).dir;
