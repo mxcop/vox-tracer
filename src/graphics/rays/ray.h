@@ -41,12 +41,20 @@ struct Ray {
         : origin(origin), dir(dir), r_dir(1.0f / dir), sign_dir(sign_of_dir(dir)) {}
 
    private:
+    __forceinline i32 getsign(const f32 f) const { return (i32)(((u32&)f) >> 31) * 2 - 1; }
+
     /* Get the signs of a vector (-1 | 1) */
     inline float3 sign_of_dir(float3 d) const {
         float3 signs = float3();
+        #if 1
+        signs.x = -getsign(dir.x);
+        signs.y = -getsign(dir.y);
+        signs.z = -getsign(dir.z);
+        #else
         signs.x = copysign(1.0f, dir.x);
         signs.y = copysign(1.0f, dir.y);
         signs.z = copysign(1.0f, dir.z);
+        #endif
         return signs;
     }
 };
