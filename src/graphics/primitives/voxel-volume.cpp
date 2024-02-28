@@ -25,6 +25,7 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     /* Setup for DDA traversal */
     f32 lod = MAX_LEVEL_SIZE, rlod = 1.0f / MAX_LEVEL_SIZE;
     u32 level = BRICK_LEVELS;
+    u8* lod_ptr = voxels[level];
     float3 pos = clamp(floorf(p0 * rlod) * lod, float3(0), volume - 1.0f);
     float3 step = ray.sign_dir * lod;
     float3 delta = inv_extend * step;
@@ -34,13 +35,13 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
     f32 t = 0.0f;
     u32 j = 0;
     for (hit.steps; hit.steps < MAX_STEPS; ++hit.steps) {
-        const u8 voxel = fetch_voxel(floori(pos * rlod), level);
+        const u8* voxel = fetch_voxel(floori(pos * rlod), lod_ptr);
 
-        if (voxel) {
+        if (*voxel) {
             /* Stop if we hit something in L1 */
             if (level == 0) {
                 hit.depth = tmin + (tmax - tmin) * t;
-                hit.albedo = float3((f32)voxel / 256.0f);
+                hit.albedo = float3((f32)*voxel / 256.0f);
                 /* If we hit on the first step, we have to compute the normal */
                 if (hit.steps <= BRICK_LEVELS) {
                     const float3 p = (ray.origin + ray.dir * tmin);
@@ -67,6 +68,7 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             /* Move down one level */
             lod *= BRICK_LEVEL_REC[level], rlod *= BRICK_LEVEL_MUL[level];
             step *= BRICK_LEVEL_REC[level], delta *= BRICK_LEVEL_REC[level];
+            lod_ptr = voxels[level];
 
             pos =
                 clamp(floorf((p0 + (t) * extend) * rlod) * lod, float3(0), volume - 1.0f);
@@ -81,6 +83,7 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             /* Move up one level */
             lod *= BRICK_LEVEL_MUL[level - 1], rlod *= BRICK_LEVEL_REC[level - 1];
             step *= BRICK_LEVEL_MUL[level - 1], delta *= BRICK_LEVEL_MUL[level - 1];
+            lod_ptr = voxels[level];
 
             pos =
                 clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
@@ -230,14 +233,15 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
     const float3 volume = (bbmax - bbmin) * scale;
 
     /* Exit if the end-point is outside the volume */
-    // if (p1.x < 0 || p1.y < 0 || p1.z < 0 || p1.x > volume.x - 1 || p1.y > volume.y - 1 ||
-    //     p1.z > volume.z - 1) {
-    //     return false;
-    // }
+    //if (p1.x < 0 || p1.y < 0 || p1.z < 0 || p1.x > volume.x - 1 || p1.y > volume.y - 1 ||
+    //    p1.z > volume.z - 1) {
+    //    return false;
+    //}
 
     /* Setup for DDA traversal */
     f32 lod = MAX_LEVEL_SIZE, rlod = 1.0f / MAX_LEVEL_SIZE;
     u32 level = BRICK_LEVELS;
+    u8* lod_ptr = voxels[level];
     float3 pos = clamp(floorf(p0 * rlod) * lod, float3(0), volume - 1.0f);
     float3 step = ray.sign_dir * lod;
     float3 delta = inv_extend * step;
@@ -247,9 +251,9 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
     float3 normal = {};
     f32 t = 0.0f;
     for (u32 i = 0, j = 0; i < MAX_STEPS; ++i) {
-        const u8 voxel = fetch_voxel(floori(pos * rlod), level);
+        const u8* voxel = fetch_voxel(floori(pos * rlod), lod_ptr);
 
-        if (voxel) {
+        if (*voxel) {
             /* Stop if we hit something in L1 */
             if (level == 0) {
                 return true;
@@ -259,6 +263,7 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
             /* Move down one level */
             lod *= BRICK_LEVEL_REC[level], rlod *= BRICK_LEVEL_MUL[level];
             step *= BRICK_LEVEL_REC[level], delta *= BRICK_LEVEL_REC[level];
+            lod_ptr = voxels[level];
 
             pos =
                 clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
@@ -273,6 +278,7 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
             /* Move up one level */
             lod *= BRICK_LEVEL_MUL[level - 1], rlod *= BRICK_LEVEL_REC[level - 1];
             step *= BRICK_LEVEL_MUL[level - 1], delta *= BRICK_LEVEL_MUL[level - 1];
+            lod_ptr = voxels[level];
 
             pos =
                 clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);

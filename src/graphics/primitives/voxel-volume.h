@@ -13,9 +13,9 @@ constexpr f32 DEFAULT_VOXEL_SCALE = 16.0f;
 
 #define USE_BRICKMAP 1
 constexpr u32 BRICK_LEVELS = 3;
-constexpr f32 BRICK_LEVEL_MUL[BRICK_LEVELS] = {2.0f, 2.0f, 4.0f};
-constexpr f32 BRICK_LEVEL_REC[BRICK_LEVELS] = {0.5f, 0.5f, 0.25f};
-constexpr u32 MAX_LEVEL_SIZE = 16;  // 1u << BRICK_LEVELS;
+constexpr f32 BRICK_LEVEL_MUL[BRICK_LEVELS] = {2.0f, 2.0f, 2.0f};
+constexpr f32 BRICK_LEVEL_REC[BRICK_LEVELS] = {0.5f, 0.5f, 0.5f};
+constexpr u32 MAX_LEVEL_SIZE = 8;  // 1u << BRICK_LEVELS;
 // constexpr u32 BRICK_SIZE = 8;
 // constexpr f32 R_BRICK_SIZE = 1.0f / BRICK_SIZE;
 
@@ -44,9 +44,21 @@ struct VoxelVolume {
         };
     };
     // TODO: Change from vector[] to u8**!
-    std::vector<u8> voxels[BRICK_LEVELS + 1];
+    u8* voxels[BRICK_LEVELS + 1];
 
     VoxelVolume() = default;
+    ~VoxelVolume() {
+        for (u32 i = 0; i < BRICK_LEVELS + 1; i++) {
+            delete[] voxels[i];
+        }
+        delete[] voxels;
+    }
+
+    VoxelVolume(const VoxelVolume&) = delete;
+    VoxelVolume(VoxelVolume&&) = default;
+    VoxelVolume& operator=(const VoxelVolume&) = delete;
+    VoxelVolume& operator=(VoxelVolume&&) = default;
+
     /**
      * @param pos Position of the voxel volume in world space.
      * @param size Size of the voxel volume in voxels.
@@ -60,14 +72,11 @@ struct VoxelVolume {
 #else
         u32 bytes = size.x * size.y * size.z;
 #endif
-        voxels[0] = std::vector<u8>();
-        voxels[0].resize(bytes);
-
+        voxels[0] = new u8[bytes];
         for (u32 i = 0, scale = 1; i < BRICK_LEVELS; i++) {
             scale *= BRICK_LEVEL_MUL[i];
             const u32 size = (scale * scale * scale);
-            voxels[i + 1] = std::vector<u8>();
-            voxels[i + 1].resize(bytes / size);
+            voxels[i + 1] = new u8[bytes / size];
         }
 
         /* Generate the highest level of detail */
@@ -335,6 +344,16 @@ struct VoxelVolume {
         return voxels[lod][i];
     }
 
+    __forceinline const u8* fetch_voxel(const int3& idx, const u8* lod) const {
+#if USE_MORTON
+        const u32 i = morton_encode(idx.x, idx.y, idx.z);
+#else
+        const float3 size = voxel_size;
+        size_t i = ((size_t)idx.z * size.x * size.y) + ((size_t)idx.y * size.x) + idx.x;
+#endif
+        return lod + i;
+    }
+
     /* Fetch a brick from this volumes brick data. */
     //    __forceinline u8 fetch_brick(const int3& idx) const {
     // #if USE_MORTON
@@ -359,7 +378,7 @@ struct VoxelVolume {
     /* Gather 4 voxels from this volumes voxel data using SIMD. */
     __forceinline i128 gather_voxels(const i128 indices) const {
         const i128 u8mask = _mm_set1_epi32(0x000000FF);
-        return _mm_and_epi32(_mm_i32gather_epi32((int*)voxels[0].data(), indices, sizeof(u8)),
+        return _mm_and_epi32(_mm_i32gather_epi32((int*)voxels[0], indices, sizeof(u8)),
                              u8mask);
     }
 };
