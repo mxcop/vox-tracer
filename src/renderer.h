@@ -6,6 +6,7 @@
 #include "graphics/light.h"
 #include "graphics/noise/blue.h"
 #include "graphics/skydome.h"
+#include "graphics/lighting/sphere-light.h"
 
 class Renderer : public TheApp {
    public:
@@ -31,6 +32,7 @@ class Renderer : public TheApp {
     BrickVolume* volume = nullptr;
     Camera camera;
     vector<LightSource> lights;
+    vector<SphereLight> area_lights;
 
     BlueNoise bnoise;
     SkyDome skydome;

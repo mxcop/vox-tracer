@@ -462,6 +462,10 @@ void BrickVolume::place_voxel(const Ray& ray) {
         floori((ray.origin + ray.dir * hit.depth + hit.normal * 0.0001f - bbmin) * vpu);
     const int3 hit_brick = hit_cell >> 3;
 
+    /* Exit if the brick is outside the volume */
+    if (hit_brick.x < 0 || hit_brick.y < 0 || hit_brick.z < 0) return;
+    if (hit_brick.x >= bsize.x || hit_brick.y >= bsize.y || hit_brick.z >= bsize.z) return;
+
     Brick512* brick = get_brick(hit_brick);
     if (brick->packets == nullptr) {
         brick->packets = new u8[64];

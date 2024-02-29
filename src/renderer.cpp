@@ -32,7 +32,7 @@ void Renderer::init() {
     skydome = SkyDome("assets/kiara_1_dawn_8k.hdr");
 
     /* Create a voxel volume */
-    //volume = new VoxelVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
+    // volume = new VoxelVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
     volume = new BrickVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
 }
 
@@ -89,15 +89,6 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         return RGBF32_to_RGB8(&hit.albedo);
     }
 
-    /* R2 irrationals */
-    const f32 R2 = 1.22074408460575947536f;
-    const f32 R2X = 1.0f / R2;
-    const f32 R2Y = 1.0f / (R2 * R2);
-    const f32 R2Z = 1.0f / (R2 * R2 * R2);
-    const f32 R2_2D = 1.32471795724474602596f;
-    const f32 R2X_2D = 1.0f / R2_2D;
-    const f32 R2Y_2D = 1.0f / (R2_2D * R2_2D);
-
     float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.0001f;
 
     /* Reflections */
@@ -116,14 +107,14 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame_offset, 1.0f);
         const float3 jitter = (quasi_noise * hit.albedo.w - (hit.albedo.w * 0.5f));
         const float3 reflect_dir = normalize(reflect(ray.dir, hit.normal) + jitter);
-        
+
         ray = Ray(hit_pos, reflect_dir);
         hit = volume->intersect(ray);
 
         /* Skybox color if the ray missed */
         if (hit.depth >= BIG_F32) {
             color = skydome.sample_dir(ray.dir);
-            //return RGBF32_to_RGB8(&color);
+            // return RGBF32_to_RGB8(&color);
 
             /* Update accumulator */
             accu[x + y * WIN_WIDTH] += aces_approx(color);
@@ -141,7 +132,7 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
 
     /* Ambient light */
 #if 1
-    
+
 #define CONSINE_SAMPLING 1
 
     float3 ambient_c = float3(0.0f);
@@ -209,6 +200,21 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         }
     }
 
+    u32 noise_n = 0;
+    for (const SphereLight& light : area_lights) {
+        /* Compute some quasi random noise (for stochastic sampling) */
+        const float3 raw_noise = bnoise.sample_3d(x, y);
+        const u32 frame_offset = (frame + noise_n) % 128u;
+        const float3 quasi_noise = make_float3(fmod(raw_noise.x + R2X * (f32)frame_offset, 1.0f),
+                                               fmod(raw_noise.y + R2Y * (f32)frame_offset, 1.0f),
+                                               fmod(raw_noise.z + R2Z * (f32)frame_offset, 1.0f));
+
+        /* Get the contribution for this light */
+        color += light.contribution(ray, hit, hit_pos, volume, quasi_noise);
+        noise_n++;
+    }
+
+#if 0
     for (const LightSource& light : lights) {
 #if 1
         /* Jitter light position (soft shadows) */
@@ -251,12 +257,13 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         const float3 area_c = light.light * JITTER_DIAMETER;
         color += hit_color * area_c * incidence / sqd;
     }
+#endif
 #else
-     //color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
+    // color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
     color = float4(hit.depth / 8.0f, hit.depth / 8.0f, hit.depth / 8.0f, 1.0f);
-     //color = float4(hit.albedo, 1.0f);
+    // color = float4(hit.albedo, 1.0f);
     // color = float4(hit.steps / 64.0f, hit.steps / 64.0f, hit.steps / 64.0f, 1.0f);
-     return RGBF32_to_RGB8(&color);
+    return RGBF32_to_RGB8(&color);
 #endif
 
     /* Update accumulator */
@@ -384,8 +391,8 @@ void Renderer::gui(f32 dt) {
     if (ImGui::Begin("Debug window")) {
         ImGui::Text("Debug options\n");
         ImGui::Separator();
-        //ImGui::InputFloat3("Cam dir", camera.target.cell);
-        //ImGui::DragFloat3("Sun", &sun_dir.x, 0.01f, -1.0f, 1.0f);
+        // ImGui::InputFloat3("Cam dir", camera.target.cell);
+        // ImGui::DragFloat3("Sun", &sun_dir.x, 0.01f, -1.0f, 1.0f);
         ImGui::Separator();
         ImGui::SliderFloat("Aperture", &aperture, 0, 1);
         ImGui::Separator();
@@ -396,8 +403,9 @@ void Renderer::gui(f32 dt) {
     /* Light place button */
     static bool q_down = false;
     if (IsKeyDown(GLFW_KEY_Q) && q_down == false) {
-        lights.emplace_back(camera.pos, normalize(camera.target - camera.pos), aperture,
-                            light_color * 8.0f);
+        // lights.emplace_back(camera.pos, normalize(camera.target - camera.pos), aperture,
+        //                     light_color * 8.0f);
+        area_lights.emplace_back(camera.pos, 0.1f, light_color, 32.0f);
         q_down = true;
     }
     if (!IsKeyDown(GLFW_KEY_Q) && q_down == true) {

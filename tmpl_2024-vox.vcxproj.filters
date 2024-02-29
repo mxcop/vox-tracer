@@ -41,6 +41,7 @@
     <ClCompile Include="src\graphics\noise\blue.cpp" />
     <ClCompile Include="src\graphics\skydome.cpp" />
     <ClCompile Include="src\graphics\primitives\brick-volume.cpp" />
+    <ClCompile Include="src\graphics\lighting\sphere-light.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\renderer.h" />
@@ -102,6 +103,7 @@
     <ClInclude Include="src\graphics\skydome.h" />
     <ClInclude Include="src\graphics\primitives\brick-volume.h" />
     <ClInclude Include="src\graphics\tonemap.h" />
+    <ClInclude Include="src\graphics\lighting\sphere-light.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template">
