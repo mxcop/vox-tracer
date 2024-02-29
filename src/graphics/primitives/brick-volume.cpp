@@ -3,7 +3,12 @@
 constexpr u32 MAX_STEPS = 256;
 
 BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
-    : bbmin(pos), bbmax(pos + float3(size) / vpu), vsize(size), bsize(size >> 3), vpu(vpu), bpu(vpu * 0.125f) {
+    : bbmin(pos),
+      bbmax(pos + float3(size) / vpu),
+      vsize(size),
+      bsize(size >> 3),
+      vpu(vpu),
+      bpu(vpu * 0.125f) {
     /* Volume size MUST BE a multiple of 8 */
     assert(size.x % 8 == 0 && size.y % 8 == 0 && size.z % 8 == 0);
 
@@ -53,17 +58,18 @@ BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
                             if (noise > 0.07f) {
                                 if (not brick->packets) {
                                     brick->packets = new u8[64];
-                                    brick->voxels = new u32[8*8*8];
+                                    brick->voxels = new u32[8 * 8 * 8];
                                     memset(brick->packets, 0x00, 64);
-                                    memset(brick->voxels, 0x00, sizeof(u32) * 8*8*8);
+                                    memset(brick->voxels, 0x00, sizeof(u32) * 8 * 8 * 8);
                                 }
 
                                 /* Noise value above */
                                 const f32 noise_up = noise3D(offset.x + (bx * 8 + x) * 0.01f,
-                                                          offset.y + (by * 8 + y + 1) * 0.01f,
-                                                          offset.z + (bz * 8 + z) * 0.01f);
-                                
+                                                             offset.y + (by * 8 + y + 1) * 0.01f,
+                                                             offset.z + (bz * 8 + z) * 0.01f);
+
                                 const u32 i = (z * 8 * 8) + (y * 8) + x;
+                                // const u32 i = morton_encode(x, y, z);
                                 if (noise_up < 0.07f) {
                                     /* Grass */
                                     const f32 noise_c =
@@ -71,8 +77,9 @@ BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
                                                      offset.y + (by * 8 + y) * 0.2f,
                                                      offset.z + (bz * 8 + z) * 0.2f) +
                                              0.3f),
-                                            2) * 2.0f;
-                                    const float4 color = float4(0.55f, 1.0f, 0.1f, 1.0f) * noise_c;
+                                            2) *
+                                        2.0f;
+                                    const float4 color = float4(0.55f, 1.0f, 0.1f, 0.0f) * noise_c;
                                     brick->voxels[i] = RGBF32_to_RGB8(&color);
                                 } else {
                                     /* Dirt */
@@ -81,9 +88,10 @@ BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
                                                      offset.y + (by * 8 + y) * 0.2f,
                                                      offset.z + (bz * 8 + z) * 0.2f) +
                                              0.3f),
-                                            2) * 2.0f;
+                                            2) *
+                                        2.0f;
                                     const float4 color =
-                                        float4(1.0f, 0.7f, 0.65f, 1.0f) * (noise_c * 0.95f + 0.05f);
+                                        float4(1.0f, 0.7f, 0.65f, 0.0f) * (noise_c * 0.95f + 0.05f);
                                     brick->voxels[i] = RGBF32_to_RGB8(&color);
                                 }
 
@@ -101,15 +109,13 @@ BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
 #endif
 }
 
-BrickVolume::~BrickVolume() { 
-    delete[] brickmap; 
-}
+BrickVolume::~BrickVolume() { delete[] brickmap; }
 
 /**
  * @brief Intersect the volume bounding box. (tmin > tmax, means no intersection)
  */
 void BrickVolume::intersect_bb(const Ray& ray, f32& tmin_out, f32& tmax_out) const {
-    #if 1
+#if 1
     /* Idea to use fmsub to save 1 instruction came from
      * <http://www.joshbarczak.com/blog/?p=787> */
     const f128 ord = _mm_mul_ps(ray.o, ray.rd);
@@ -124,7 +130,7 @@ void BrickVolume::intersect_bb(const Ray& ray, f32& tmin_out, f32& tmax_out) con
 
     /* Get the horizontal minimum and maximum "t" */
     tmax_out = _mm_hmin3_ps(vmax4), tmin_out = _mm_hmax_ps(tmin4);
-    #else
+#else
     /* Idea to use fmsub to save 1 instruction came from
      * <http://www.joshbarczak.com/blog/?p=787> */
     const f128 ord = _mm_mul_ps(ray.o, ray.rd);
@@ -138,7 +144,7 @@ void BrickVolume::intersect_bb(const Ray& ray, f32& tmin_out, f32& tmax_out) con
     const f32 tmin =
         _max(_max(_max(vmin4.m128_f32[0], vmin4.m128_f32[1]), vmin4.m128_f32[2]), 0.0f);
     tmin_out = tmin, tmax_out = tmax;
-    #endif
+#endif
 }
 
 /**
@@ -167,7 +173,7 @@ HitInfo BrickVolume::intersect(const Ray& ray) const {
     const float3 delta = fabs(ray.r_dir);
     /* Determine t at which the ray crosses the first voxel boundary */
     float3 side = ((float3(cell) - entry) + fmaxf(step, float3(0))) * ray.r_dir;
-    
+
     f32 t = 0.0f;
     const f32 rbpu = 1.0f / bpu;
     for (hit.steps = 0; hit.steps < MAX_STEPS; ++hit.steps) {
@@ -196,7 +202,7 @@ HitInfo BrickVolume::intersect(const Ray& ray) const {
                     hit.normal = -hit.normal * step;
                 }
                 hit.depth = brick_entry_t + dist;
-                
+
                 return hit;
             }
         }
@@ -301,12 +307,14 @@ bool BrickVolume::is_occluded(const Ray& ray) const {
         }
 
         if (tmin + t * rbpu >= tmax) break;
-        //if ((tmin + t / (vpu * 0.125f)) > tmax) break;
+        // if ((tmin + t / (vpu * 0.125f)) > tmax) break;
     }
 
     /* No hit occured! */
     return false;
 }
+
+// #define FIXED_DIST
 
 bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const Ray& ray,
                                  const f32 entry_t, const f32 tmax) const {
@@ -314,6 +322,7 @@ bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const R
     const float3 bmin = bbmin + float3(pos) / bpu;
     /* Brick entry position */
     const float3 entry = ((ray.origin + ray.dir * entry_t) - bmin) * vpu;
+#ifndef FIXED_DIST
     /* Clamp the entry point inside the volume grid */
     int3 cell = clamp(floori(entry), 0, 8 - 1);
 
@@ -323,16 +332,22 @@ bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const R
     const float3 delta = fabs(ray.r_dir);
     /* Determine t at which the ray crosses the first voxel boundary */
     float3 side = ((float3(cell) - entry) + fmaxf(step, float3(0))) * ray.r_dir;
+#else
+    const f32 dirlen = length(ray.dir);
+    const float3 ndir = ray.dir / dirlen;
+    float3 cell = entry;
+#endif
 
     f32 t = 0.0f;
     const f32 rvpu = 1.0f / vpu;
     for (u32 i = 0; i < MAX_STEPS; ++i) {
         /* Fetch the active cell */
-        const u8 voxel = get_voxel(brick, cell);
+        const u8 voxel = get_voxel(brick, floori(cell));
         if (voxel) {
             return true;
         }
 
+#ifndef FIXED_DIST
         /* Amanatides & Woo */
         /* <http://www.cse.yorku.ca/~amana/research/grid.pdf> */
         if (side.x < side.y) {
@@ -360,6 +375,14 @@ bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const R
                 side.z += delta.z;
             }
         }
+#else
+        /* Fixed step algorithm */
+        cell += ndir * 0.5f;
+        t += 0.5f;
+        if (cell.x < 0 || cell.x >= 8) break;
+        if (cell.y < 0 || cell.y >= 8) break;
+        if (cell.z < 0 || cell.z >= 8) break;
+#endif
 
         if (entry_t + t * rvpu >= tmax) break;
     }
@@ -428,4 +451,37 @@ f32 BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const Ra
 
     /* No hit occured! */
     return BIG_F32;
+}
+
+void BrickVolume::place_voxel(const Ray& ray) {
+    const HitInfo hit = intersect(ray);
+    if (hit.depth == BIG_F32) return;
+
+    /* Get the cell at the intersection point */
+    const int3 hit_cell =
+        floori((ray.origin + ray.dir * hit.depth + hit.normal * 0.0001f - bbmin) * vpu);
+    const int3 hit_brick = hit_cell >> 3;
+
+    Brick512* brick = get_brick(hit_brick);
+    if (brick->packets == nullptr) {
+        brick->packets = new u8[64];
+        brick->voxels = new u32[8 * 8 * 8];
+        memset(brick->packets, 0x00, 64);
+        memset(brick->voxels, 0x00, sizeof(u32) * 8 * 8 * 8);
+    }
+
+    /* Set the voxel to 1 */
+    const int3 i = hit_cell - (hit_brick << 3);
+    const u32 idx = (i.z * 8 * 8) + (i.y * 8) + i.x;
+    const u32 byte = idx >> 3;
+    const u8 bitmask = 0b1 << (idx - (byte << 3));
+    brick->packets[byte] |= bitmask;
+    brick->popcnt++;
+
+    /* Noise color */
+    const f32 noise_c = (noise3D((hit_cell.x) * 0.2f, (hit_cell.y) * 0.2f, (hit_cell.z) * 0.2f) + 0.3f) * 2.0f;
+
+    /* Insert voxel data */
+    const float4 color = float4(0.25f, 0.5f, 1.0f, 0.1f) * noise_c * noise_c;
+    brick->voxels[idx] = RGBF32_to_RGB8(&color);
 }

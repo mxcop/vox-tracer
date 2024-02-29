@@ -33,7 +33,7 @@ void Renderer::init() {
 
     /* Create a voxel volume */
     //volume = new VoxelVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
-    volume = new BrickVolume(float3(0.0f, 0.0f, 0.0f), int3(256, 256, 256));
+    volume = new BrickVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
 }
 
 /* Source : <https://github.com/tqjxlm/Monte-Carlo-Ray-Tracer> */
@@ -72,8 +72,8 @@ float3 sample_hemisphere_uniform(const float3& n) {
     }
 }
 
-u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
-    const HitInfo hit = volume->intersect(ray);
+u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
+    HitInfo hit = volume->intersect(ray);
 
     float4 color = float4(0);
 
@@ -83,10 +83,11 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     if (hit.depth >= BIG_F32) {
         color = skydome.sample_dir(ray.dir);
         return RGBF32_to_RGB8(&color);
-        // return 0xFF101010;
     }
 
-    const float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.0001f;
+    if (fast_mode) {
+        return RGBF32_to_RGB8(&hit.albedo);
+    }
 
     /* R2 irrationals */
     const f32 R2 = 1.22074408460575947536f;
@@ -96,6 +97,47 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     const f32 R2_2D = 1.32471795724474602596f;
     const f32 R2X_2D = 1.0f / R2_2D;
     const f32 R2Y_2D = 1.0f / (R2_2D * R2_2D);
+
+    float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.0001f;
+
+    /* Reflections */
+#if 1
+    constexpr u32 MAX_BOUNCES = 8;
+    for (u32 i = 0; i < MAX_BOUNCES && hit.albedo.w > 0.0f; ++i) {
+        /* Shoot a reflection ray */
+        // ray = Ray(hit_pos, reflect(ray.dir, hit.normal));
+
+        /* Blue noise + R2 (cosine weighted distribution) */
+        float3 raw_noise = bnoise.sample_3d(x, y);
+        u32 frame_offset = frame % 128u;
+        float3 quasi_noise;
+        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame_offset, 1.0f);
+        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame_offset, 1.0f);
+        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame_offset, 1.0f);
+        const float3 jitter = (quasi_noise * hit.albedo.w - (hit.albedo.w * 0.5f));
+        const float3 reflect_dir = normalize(reflect(ray.dir, hit.normal) + jitter);
+        
+        ray = Ray(hit_pos, reflect_dir);
+        hit = volume->intersect(ray);
+
+        /* Skybox color if the ray missed */
+        if (hit.depth >= BIG_F32) {
+            color = skydome.sample_dir(ray.dir);
+            //return RGBF32_to_RGB8(&color);
+
+            /* Update accumulator */
+            accu[x + y * WIN_WIDTH] += aces_approx(color);
+            color = accu[x + y * WIN_WIDTH] / (f32)accu_len;
+
+            return RGBF32_to_RGB8(&color);
+        }
+
+        /* Update the intersection point */
+        hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.0001f;
+    }
+#endif
+
+    const float3 hit_color = float3(hit.albedo);
 
     /* Ambient light */
 #if 1
@@ -124,7 +166,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
 #endif
 
         /* Shoot the ambient ray */
-        const Ray ambient_ray = Ray(hit_pos, ambient_dir * 32.0f);
+        const Ray ambient_ray = Ray(hit_pos + ambient_dir * 32.0f, -ambient_dir * 32.0f);
         const bool in_shadow = volume->is_occluded(ambient_ray);
 
         if (not in_shadow) {
@@ -134,8 +176,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
         }
     }
     /* Divide by the number of samples */
-    color += hit.albedo * (ambient_c * (1.0f / SAMPLES));
-    // color += ambient_c * 0.05f; /* TODO: remove this */
+    color += hit_color * (ambient_c * (1.0f / SAMPLES));
 
 #endif
 
@@ -159,12 +200,12 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
         if (incidence <= 0.0f) continue;
 
         /* Shoot shadow ray */
-        const Ray shadow_ray = Ray(hit_pos, sun_dirj * 32.0f);
+        const Ray shadow_ray = Ray(hit_pos + sun_dirj * 32.0f, -sun_dirj * 32.0f);
         const bool in_shadow = volume->is_occluded(shadow_ray);
 
         if (not in_shadow) {
             const float3 sun_light = float3(2.5f, 2.5f, 2.5f);
-            color += hit.albedo * sun_light * incidence;
+            color += hit_color * sun_light * incidence;
         }
     }
 
@@ -208,7 +249,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
 
         /* Area contribution */
         const float3 area_c = light.light * JITTER_DIAMETER;
-        color += hit.albedo * area_c * incidence / sqd;
+        color += hit_color * area_c * incidence / sqd;
     }
 #else
      //color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
@@ -352,6 +393,7 @@ void Renderer::gui(f32 dt) {
     }
     ImGui::End();
 
+    /* Light place button */
     static bool q_down = false;
     if (IsKeyDown(GLFW_KEY_Q) && q_down == false) {
         lights.emplace_back(camera.pos, normalize(camera.target - camera.pos), aperture,
@@ -361,6 +403,18 @@ void Renderer::gui(f32 dt) {
     if (!IsKeyDown(GLFW_KEY_Q) && q_down == true) {
         q_down = false;
     }
+
+    /* Fast mode switch */
+    static bool f_down = false;
+    if (IsKeyDown(GLFW_KEY_F) && f_down == false) {
+        fast_mode = !fast_mode;
+        accu_len = 1u;
+        memset(accu, 0, WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
+        f_down = true;
+    }
+    if (!IsKeyDown(GLFW_KEY_F) && f_down == true) {
+        f_down = false;
+    }
 }
 
 void Renderer::shutdown() {
@@ -368,4 +422,10 @@ void Renderer::shutdown() {
     FILE* f = fopen("camera.bin", "wb");
     fwrite(&camera, 1, sizeof(Camera), f);
     fclose(f);
+}
+
+void Renderer::MouseDown(int button) {
+    if (button == 0) {
+        volume->place_voxel(camera.get_primary_ray(mousePos.x, mousePos.y));
+    }
 }

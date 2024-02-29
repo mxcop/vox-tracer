@@ -10,13 +10,13 @@
 class Renderer : public TheApp {
    public:
     void init();
-    u32 trace(const Ray& ray, const u32 x, const u32 y) const;
+    u32 trace(Ray& ray, const u32 x, const u32 y) const;
     void tick(f32 dt);
     void gui(f32 dt);
     void shutdown();
     /* User input */
     void MouseUp(int button) {}
-    void MouseDown(int button) {}
+    void MouseDown(int button);
     void MouseMove(int x, int y) { mousePos.x = x, mousePos.y = y; }
     void MouseWheel(float y) {}
     void KeyUp(int key) {}
@@ -38,4 +38,6 @@ class Renderer : public TheApp {
     /* Accumulator */
     float4* accu = nullptr;
     mutable u32 accu_len = 1u;
+
+    bool fast_mode = true;
 };
