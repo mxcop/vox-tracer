@@ -33,7 +33,7 @@ void Renderer::init() {
 
     /* Create a voxel volume */
     //volume = new VoxelVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
-    volume = new BrickVolume(float3(0.0f, 0.0f, 0.0f), int3(2048, 2048, 2048));
+    volume = new BrickVolume(float3(0.0f, 0.0f, 0.0f), int3(256, 256, 256));
 }
 
 /* Source : <https://github.com/tqjxlm/Monte-Carlo-Ray-Tracer> */
@@ -78,7 +78,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
     float4 color = float4(0);
 
 /* Point & spot lights */
-#if 0
+#if 1
     /* Skybox color if the ray missed */
     if (hit.depth >= BIG_F32) {
         color = skydome.sample_dir(ray.dir);
@@ -163,7 +163,7 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
         const bool in_shadow = volume->is_occluded(shadow_ray);
 
         if (not in_shadow) {
-            const float3 sun_light = float3(3.0f, 2.5f, 2.0f);
+            const float3 sun_light = float3(2.5f, 2.5f, 2.5f);
             color += hit.albedo * sun_light * incidence;
         }
     }
@@ -211,8 +211,8 @@ u32 Renderer::trace(const Ray& ray, const u32 x, const u32 y) const {
         color += hit.albedo * area_c * incidence / sqd;
     }
 #else
-     color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
-    //color = float4(hit.depth / 8.0f, hit.depth / 8.0f, hit.depth / 8.0f, 1.0f);
+     //color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
+    color = float4(hit.depth / 8.0f, hit.depth / 8.0f, hit.depth / 8.0f, 1.0f);
      //color = float4(hit.albedo, 1.0f);
     // color = float4(hit.steps / 64.0f, hit.steps / 64.0f, hit.steps / 64.0f, 1.0f);
      return RGBF32_to_RGB8(&color);

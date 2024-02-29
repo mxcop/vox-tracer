@@ -12,6 +12,7 @@ BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
     const u64 bricks = (u64)bsize.x * bsize.y * bsize.z;
     brickmap = new Brick512[bricks];
 
+#if 0
     /* TEMP: Random bricks */
     u32 seed = 18942663u;
     u32 seed2 = 74928367u;
@@ -35,33 +36,69 @@ BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
             }
         }
     }
+#else
+    const float3 offset = make_float3(RandomFloat(), RandomFloat(), RandomFloat());
+#pragma omp parallel for schedule(dynamic)
+    for (i32 bz = 0; bz < bsize.z; bz++) {
+        for (u32 by = 0; by < bsize.y; by++) {
+            for (u32 bx = 0; bx < bsize.x; bx++) {
+                Brick512* brick = &brickmap[(bz * bsize.y * bsize.x) + (by * bsize.x) + bx];
+                for (u32 z = 0; z < 8; z++) {
+                    for (u32 y = 0; y < 8; y++) {
+                        for (u32 x = 0; x < 8; x++) {
+                            const f32 noise = noise3D(offset.x + (bx * 8 + x) * 0.01f,
+                                                      offset.y + (by * 8 + y) * 0.01f,
+                                                      offset.z + (bz * 8 + z) * 0.01f);
 
-    //for (u32 z = 0; z < bsize.z; z++) {
-    //    for (u32 y = 0; y < bsize.y; y++) {
-    //        for (u32 x = 0; x < bsize.x; x++) {
-    //            const float3 noise_pos = float3(x, y, z) * 8.0f / 128.0f;
-    //            const u32 i = (z * bsize.x * bsize.y) + (y * bsize.x) + x;
+                            if (noise > 0.07f) {
+                                if (not brick->packets) {
+                                    brick->packets = new u8[64];
+                                    brick->voxels = new u32[8*8*8];
+                                    memset(brick->packets, 0x00, 64);
+                                    memset(brick->voxels, 0x00, sizeof(u32) * 8*8*8);
+                                }
 
-    //            const f32 noise = noise3D(noise_pos.x, noise_pos.y, noise_pos.z);
-    //            if (noise > 0.09f) {
-    //                /* Allocate voxel packets */
-    //                brickmap[i].packets = make_unique_for_overwrite<u8[]>(64);
-    //                // brick.brick_index = i;
+                                /* Noise value above */
+                                const f32 noise_up = noise3D(offset.x + (bx * 8 + x) * 0.01f,
+                                                          offset.y + (by * 8 + y + 1) * 0.01f,
+                                                          offset.z + (bz * 8 + z) * 0.01f);
+                                
+                                const u32 i = (z * 8 * 8) + (y * 8) + x;
+                                if (noise_up < 0.07f) {
+                                    /* Grass */
+                                    const f32 noise_c =
+                                        pow((noise3D(offset.x + (bx * 8 + x) * 0.2f,
+                                                     offset.y + (by * 8 + y) * 0.2f,
+                                                     offset.z + (bz * 8 + z) * 0.2f) +
+                                             0.3f),
+                                            2) * 2.0f;
+                                    const float4 color = float4(0.55f, 1.0f, 0.1f, 1.0f) * noise_c;
+                                    brick->voxels[i] = RGBF32_to_RGB8(&color);
+                                } else {
+                                    /* Dirt */
+                                    const f32 noise_c =
+                                        pow((noise3D(offset.x + (bx * 8 + x) * 0.2f,
+                                                     offset.y + (by * 8 + y) * 0.2f,
+                                                     offset.z + (bz * 8 + z) * 0.2f) +
+                                             0.3f),
+                                            2) * 2.0f;
+                                    const float4 color =
+                                        float4(1.0f, 0.7f, 0.65f, 1.0f) * (noise_c * 0.95f + 0.05f);
+                                    brick->voxels[i] = RGBF32_to_RGB8(&color);
+                                }
 
-    //                /* Randomly assign voxels */
-    //                for (u16 j = 0; j < 64; j++) {
-    //                    brickmap[i].packets[j] = 0u;
-    //                    for (u8 b = 0; b < 8; b++) {
-    //                        if (RandomFloat(seed2) < /*0.05f*/1.0f) {
-    //                            brickmap[i].packets[j] |= (0b1 << b);
-    //                            brickmap[i].popcnt++;
-    //                        }
-    //                    }
-    //                }
-    //            }
-    //        }
-    //    }
-    //}
+                                const u32 byte = i >> 3;
+                                const u8 bitmask = 0b1 << (i - (byte << 3));
+                                brick->packets[byte] |= bitmask;
+                                brick->popcnt++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif
 }
 
 BrickVolume::~BrickVolume() { 
@@ -132,11 +169,12 @@ HitInfo BrickVolume::intersect(const Ray& ray) const {
     float3 side = ((float3(cell) - entry) + fmaxf(step, float3(0))) * ray.r_dir;
     
     f32 t = 0.0f;
+    const f32 rbpu = 1.0f / bpu;
     for (hit.steps = 0; hit.steps < MAX_STEPS; ++hit.steps) {
         /* Fetch the active cell */
         const Brick512* brick = get_brick(cell);
         if (brick->popcnt > 0) {
-            const f32 brick_entry_t = hit.depth + t / bpu;
+            const f32 brick_entry_t = hit.depth + t * rbpu;
             const f32 dist = traverse_brick(brick, cell, ray, brick_entry_t, hit);
             if (dist != BIG_F32) {
                 if (hit.steps == 0) {
@@ -157,8 +195,7 @@ HitInfo BrickVolume::intersect(const Ray& ray) const {
                 } else {
                     hit.normal = -hit.normal * step;
                 }
-                hit.depth = hit.depth + t / bpu;
-                hit.albedo = float3(1);
+                hit.depth = brick_entry_t + dist;
                 
                 return hit;
             }
@@ -203,15 +240,13 @@ HitInfo BrickVolume::intersect(const Ray& ray) const {
 }
 
 bool BrickVolume::is_occluded(const Ray& ray) const {
-    //return intersect(ray).depth != BIG_F32;
-
     /* Exit if the ray misses the volume */
     f32 tmin, tmax;
     intersect_bb(ray, tmin, tmax);
-    if (tmin > tmax - 0.01f) {
+    tmax = min(tmax, 1.0f);
+    if (tmin > tmax - 0.001f) {
         return false;
     }
-    //tmax = min(tmax, 1.0f);
 
     /* Volume entry position */
     const float3 entry = ((ray.origin + ray.dir * tmin) - bbmin) * bpu;
@@ -226,12 +261,13 @@ bool BrickVolume::is_occluded(const Ray& ray) const {
     float3 side = ((float3(cell) - entry) + fmaxf(step, float3(0))) * ray.r_dir;
 
     f32 t = 0.0f;
+    const f32 rbpu = 1.0f / bpu;
     for (u32 i = 0; i < MAX_STEPS; ++i) {
         /* Fetch the active cell */
         const Brick512* brick = get_brick(cell);
         if (brick->popcnt > 0) {
-            const f32 brick_entry_t = tmin + t / bpu;
-            if (traverse_brick(brick, cell, ray, brick_entry_t)) {
+            const f32 brick_entry_t = tmin + t * rbpu;
+            if (traverse_brick(brick, cell, ray, brick_entry_t, tmax)) {
                 return true;
             }
         }
@@ -264,6 +300,7 @@ bool BrickVolume::is_occluded(const Ray& ray) const {
             }
         }
 
+        if (tmin + t * rbpu >= tmax) break;
         //if ((tmin + t / (vpu * 0.125f)) > tmax) break;
     }
 
@@ -272,11 +309,11 @@ bool BrickVolume::is_occluded(const Ray& ray) const {
 }
 
 bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const Ray& ray,
-                                 const f32 entry_t) const {
+                                 const f32 entry_t, const f32 tmax) const {
     /* Brick minimum position */
     const float3 bmin = bbmin + float3(pos) / bpu;
     /* Brick entry position */
-    const float3 entry = ((ray.origin + ray.dir * (entry_t)) - bmin) * vpu;
+    const float3 entry = ((ray.origin + ray.dir * entry_t) - bmin) * vpu;
     /* Clamp the entry point inside the volume grid */
     int3 cell = clamp(floori(entry), 0, 8 - 1);
 
@@ -287,6 +324,8 @@ bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const R
     /* Determine t at which the ray crosses the first voxel boundary */
     float3 side = ((float3(cell) - entry) + fmaxf(step, float3(0))) * ray.r_dir;
 
+    f32 t = 0.0f;
+    const f32 rvpu = 1.0f / vpu;
     for (u32 i = 0; i < MAX_STEPS; ++i) {
         /* Fetch the active cell */
         const u8 voxel = get_voxel(brick, cell);
@@ -300,23 +339,29 @@ bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const R
             if (side.x < side.z) {
                 cell.x += step.x;
                 if (cell.x < 0 || cell.x >= 8) break;
+                t = side.x;
                 side.x += delta.x;
             } else {
                 cell.z += step.z;
                 if (cell.z < 0 || cell.z >= 8) break;
+                t = side.z;
                 side.z += delta.z;
             }
         } else {
             if (side.y < side.z) {
                 cell.y += step.y;
                 if (cell.y < 0 || cell.y >= 8) break;
+                t = side.y;
                 side.y += delta.y;
             } else {
                 cell.z += step.z;
                 if (cell.z < 0 || cell.z >= 8) break;
+                t = side.z;
                 side.z += delta.z;
             }
         }
+
+        if (entry_t + t * rvpu >= tmax) break;
     }
 
     /* No hit occured! */
@@ -344,6 +389,7 @@ f32 BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const Ra
         /* Fetch the active cell */
         const u8 voxel = get_voxel(brick, cell);
         if (voxel) {
+            hit.albedo = RGB8_to_RGBF32(brick->voxels[(cell.z * 8 * 8) + (cell.y * 8) + cell.x]);
             return t / vpu;
         }
 

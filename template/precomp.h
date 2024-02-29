@@ -344,6 +344,13 @@ inline uint RGBF32_to_RGB8( const float4* v )
 #endif
 }
 
+inline float4 RGB8_to_RGBF32(const uint& v) {
+	const f32 r = (f32)(v >> 16 & 0xFF) / 255.0f;
+	const f32 g = (f32)(v >> 8 & 0xFF) / 255.0f;
+	const f32 b = (f32)(v >> 0 & 0xFF) / 255.0f;
+	return float4(r, g, b, 0.0f);
+}
+
 // application base class
 class TheApp
 {

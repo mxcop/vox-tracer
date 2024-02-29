@@ -1031,3 +1031,4 @@ float3 TransformVector_SSE( const __m128& a, const mat4& M );
 // Perlin noise
 float noise2D( const float x, const float y );
 float noise3D( const float x, const float y, const float z );
+float SmoothedNoise(const int i, const int x, const int y);

@@ -30,12 +30,13 @@ class BrickVolume {
     const f32 bpu = DEFAULT_VPU * 0.125f;
 
     /* Voxel data */
-    // vector<u8> voxels;
+    u8* voxels = nullptr;
 
     /* 8x8x8 Brick contains 512 voxels */
     struct Brick512 {
         /* Pointer to 64 voxel packets each packet contains 8 voxels */
         u8* packets = nullptr;
+        u32* voxels = nullptr;
         /* Number of active voxels in the brick */
         u16 popcnt = 0;
         /* TODO: Have 6 more bytes here to use... */
@@ -43,6 +44,7 @@ class BrickVolume {
         Brick512() = default;
         ~Brick512() {
             if (packets) delete[] packets;
+            if (voxels) delete[] voxels;
         }
         Brick512(const Brick512&) = delete;
         Brick512(Brick512&&) = default;
@@ -74,7 +76,7 @@ class BrickVolume {
     __inline f32 traverse_brick(const Brick512* brick, const int3& pos, const Ray& ray,
                                  const f32 entry_t, HitInfo& hit) const;
     __inline bool traverse_brick(const Brick512* brick, const int3& pos, const Ray& ray,
-                                 const f32 entry_t) const;
+                                 const f32 entry_t, const f32 tmax) const;
 
    public:
     BrickVolume() = default;

@@ -70,7 +70,7 @@ static float Noise( const int i, const int x, const int y )
 	const int t = (n * (n * n * a + b) + c) & 0x7fffffff;
 	return 1.0f - (float)t / 1073741824.0f;
 }
-static float SmoothedNoise( const int i, const int x, const int y )
+float SmoothedNoise( const int i, const int x, const int y )
 {
 	const float corners = (Noise( i, x - 1, y - 1 ) + Noise( i, x + 1, y - 1 ) + Noise( i, x - 1, y + 1 ) + Noise( i, x + 1, y + 1 )) / 16;
 	const float sides = (Noise( i, x - 1, y ) + Noise( i, x + 1, y ) + Noise( i, x, y - 1 ) + Noise( i, x, y + 1 )) / 8;
