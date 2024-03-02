@@ -23,12 +23,17 @@ class Renderer : public TheApp {
     void KeyUp(int key) {}
     void KeyDown(int key) {}
 
+    /* Reset the accumulator */
+    inline void reset_accu() {
+        accu_len = 1u, memset(accu, 0, (size_t)WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
+    };
+
     int2 mousePos;
     f32 frame_time = 1.0f;
     u32 frame = 0u;
     float3 sun_dir = {-0.619501f, 0.465931f, -0.631765f};
 
-    //VoxelVolume* volume = nullptr;
+    // VoxelVolume* volume = nullptr;
     BrickVolume* volume = nullptr;
     Camera camera;
     vector<LightSource> lights;

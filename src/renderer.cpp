@@ -1,5 +1,7 @@
 #include <functional>
-#include <graphics/tonemap.h>
+
+#include "graphics/tonemap.h"
+#include "dev/gui.h"
 
 void printb(u64 u) {
     for (int i = 63; i >= 0; i--) {
@@ -29,7 +31,7 @@ void Renderer::init() {
     if (accu) memset(accu, 0, WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
 
     bnoise = BlueNoise();
-    skydome = SkyDome("assets/kiara_1_dawn_8k.hdr");
+    skydome = SkyDome("assets/skydome.hdr");
 
     /* Create a voxel volume */
     // volume = new VoxelVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
@@ -89,15 +91,12 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         return RGBF32_to_RGB8(&hit.albedo);
     }
 
-    float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.0001f;
+    float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.000001f;
 
     /* Reflections */
 #if 1
     constexpr u32 MAX_BOUNCES = 8;
     for (u32 i = 0; i < MAX_BOUNCES && hit.albedo.w > 0.0f; ++i) {
-        /* Shoot a reflection ray */
-        // ray = Ray(hit_pos, reflect(ray.dir, hit.normal));
-
         /* Blue noise + R2 (cosine weighted distribution) */
         float3 raw_noise = bnoise.sample_3d(x, y);
         u32 frame_offset = frame % 128u;
@@ -114,7 +113,6 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         /* Skybox color if the ray missed */
         if (hit.depth >= BIG_F32) {
             color = skydome.sample_dir(ray.dir);
-            // return RGBF32_to_RGB8(&color);
 
             /* Update accumulator */
             accu[x + y * WIN_WIDTH] += aces_approx(color);
@@ -124,7 +122,7 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         }
 
         /* Update the intersection point */
-        hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.0001f;
+        hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.000001f;
     }
 #endif
 
@@ -155,15 +153,15 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         // float3 ambient_dir = normalize(quasi_noise);
         float3 ambient_dir = sample_hemisphere_uniform(hit.normal);
 #endif
-
         /* Shoot the ambient ray */
         const Ray ambient_ray = Ray(hit_pos + ambient_dir * 32.0f, -ambient_dir * 32.0f);
         const bool in_shadow = volume->is_occluded(ambient_ray);
 
         if (not in_shadow) {
+            const f32 pdf = dot(ambient_dir, hit.normal) * INVPI;
             /* Multiply by 2 Pi because the area we're integrating is 2 Pi */
             const float3 sample = skydome.sample_dir(ambient_dir);
-            ambient_c += (sample * TWOPI);
+            ambient_c += (sample / pdf);
         }
     }
     /* Divide by the number of samples */
@@ -303,7 +301,7 @@ void Renderer::tick(f32 dt) {
         }
     }
 #elif 1
-    constexpr u32 TILE_SIZE = 16;  // 7.7M rays/s
+    constexpr u32 TILE_SIZE = 8;  // 7.7M rays/s
 #pragma omp parallel for schedule(dynamic)
     for (i32 y = 0; y < WIN_HEIGHT; y += TILE_SIZE) {
         for (u32 x = 0; x < WIN_WIDTH; x += TILE_SIZE) {
@@ -371,7 +369,7 @@ void Renderer::gui(f32 dt) {
 
     /* Display performance */
     ImGui::SetNextWindowBgAlpha(0.35f);
-    if (ImGui::Begin("Perf overlay", nullptr, overlay_flags)) {
+    if (ImGui::Begin("Stats", nullptr, overlay_flags)) {
         f32 frame_time_us = frame_time * 1'000'000.0f;
         f64 win_size = (f64)WIN_WIDTH * WIN_HEIGHT;
         ImGui::Text("Perf overlay\n");
@@ -386,43 +384,30 @@ void Renderer::gui(f32 dt) {
     }
     ImGui::End();
 
-    static float3 light_color = float3(1);
-    static f32 aperture = 1.0f;
-    if (ImGui::Begin("Debug window")) {
-        ImGui::Text("Debug options\n");
-        ImGui::Separator();
-        // ImGui::InputFloat3("Cam dir", camera.target.cell);
-        // ImGui::DragFloat3("Sun", &sun_dir.x, 0.01f, -1.0f, 1.0f);
-        ImGui::Separator();
-        ImGui::SliderFloat("Aperture", &aperture, 0, 1);
-        ImGui::Separator();
-        ImGui::ColorPicker3("New light", &light_color.x);
-    }
-    ImGui::End();
-
-    /* Light place button */
-    static bool q_down = false;
-    if (IsKeyDown(GLFW_KEY_Q) && q_down == false) {
-        // lights.emplace_back(camera.pos, normalize(camera.target - camera.pos), aperture,
-        //                     light_color * 8.0f);
-        area_lights.emplace_back(camera.pos, 0.1f, light_color, 32.0f);
-        q_down = true;
-    }
-    if (!IsKeyDown(GLFW_KEY_Q) && q_down == true) {
-        q_down = false;
-    }
+    devgui_control();
 
     /* Fast mode switch */
     static bool f_down = false;
     if (IsKeyDown(GLFW_KEY_F) && f_down == false) {
         fast_mode = !fast_mode;
-        accu_len = 1u;
-        memset(accu, 0, WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
+        reset_accu();
         f_down = true;
     }
     if (!IsKeyDown(GLFW_KEY_F) && f_down == true) {
         f_down = false;
     }
+
+#ifdef DEV
+    /* Dev gui switch */
+    static bool tilde_down = false;
+    if (IsKeyDown(GLFW_KEY_GRAVE_ACCENT) && !tilde_down) {
+        dev::hide_devgui = !dev::hide_devgui;
+        tilde_down = true;
+    }
+    if (!IsKeyDown(GLFW_KEY_GRAVE_ACCENT) && tilde_down) {
+        tilde_down = false;
+    }
+#endif
 }
 
 void Renderer::shutdown() {
@@ -433,7 +418,13 @@ void Renderer::shutdown() {
 }
 
 void Renderer::MouseDown(int button) {
+#ifdef DEV
+    /* Don't listen to mouse if it's over ImGui windows */
+    if (ImGui::GetIO().WantCaptureMouse) return;
+#endif
+
     if (button == 0) {
         volume->place_voxel(camera.get_primary_ray(mousePos.x, mousePos.y));
+        reset_accu();
     }
 }

@@ -18,6 +18,11 @@
 #include "types.h"
 #include "simd.h"
 
+// Development header (from Max)
+#ifdef DEV
+#include <dev/dev.h>
+#endif
+
 // header for AVX, and every technology before it.
 // if your CPU does not support this (unlikely), include the appropriate header instead.
 // see: https://stackoverflow.com/a/11228864/2844473

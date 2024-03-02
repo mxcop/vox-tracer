@@ -140,7 +140,11 @@ void main()
 	// initialize application
 	InitRenderTarget( WIN_WIDTH, WIN_HEIGHT );
 	Surface* screen = new Surface( WIN_WIDTH, WIN_HEIGHT );
-	app = new Renderer();
+    Renderer* r = new Renderer();
+    app = r;
+#ifdef DEV
+    dev::renderer = r;
+#endif
 #if 0
 	// deserizalize
 	FILE* f = fopen( "appstate.dat", "rb" );
@@ -173,6 +177,8 @@ void main()
 	ImGui_ImplGlfw_InitForOpenGL( window, true );
 	ImGui_ImplOpenGL3_Init( 0 );
 	ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 6.f;
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = "./imgui.ini";
 	// done, enter main loop
