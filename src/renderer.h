@@ -26,6 +26,7 @@ class Renderer : public TheApp {
     /* Reset the accumulator */
     inline void reset_accu() {
         accu_len = 1u, memset(accu, 0, (size_t)WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
+        frame = 0; /* <- reduce flickering while moving */
     };
 
     int2 mousePos;

@@ -3,6 +3,11 @@
 #ifdef DEV
 
 /**
+ * @brief Update the development statistics GUI.
+ */
+extern void devgui_stats(const f32 dt);
+
+/**
  * @brief Update the development control GUI.
  */
 extern void devgui_control();
@@ -12,6 +17,11 @@ extern void devgui_control();
 /**
  * @brief DOES NOTHING IF "DEV" IS UNDEFINED.
  */
-void devgui_control(){};
+inline void devgui_stats(const f32 dt){};
+
+/**
+ * @brief DOES NOTHING IF "DEV" IS UNDEFINED.
+ */
+inline void devgui_control(){};
 
 #endif

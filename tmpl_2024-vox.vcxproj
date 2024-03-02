@@ -211,6 +211,7 @@
     <ClInclude Include="src\dev\gui.h" />
     <ClInclude Include="src\graphics\camera.h" />
     <ClInclude Include="src\graphics\light.h" />
+    <ClInclude Include="src\graphics\lighting\sample.h" />
     <ClInclude Include="src\graphics\lighting\sphere-light.h" />
     <ClInclude Include="src\graphics\noise\blue.h" />
     <ClInclude Include="src\graphics\primitives\brick-volume.h" />

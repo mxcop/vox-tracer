@@ -1,22 +1,8 @@
 #include <functional>
 
+#include "graphics/lighting/sample.h"
 #include "graphics/tonemap.h"
 #include "dev/gui.h"
-
-void printb(u64 u) {
-    for (int i = 63; i >= 0; i--) {
-        if ((i + 1) % 8 == 0) printf("_");
-        printf("%i", (u & ((u64)1u << i)) ? 1 : 0);
-    }
-    printf("\n");
-}
-void printb(u32 u) {
-    for (int i = 0; i < 32; i++) {
-        if (i % 8 == 0) printf("_");
-        printf("%i", u & (1 << i) ? 1 : 0);
-    }
-    printf("\n");
-}
 
 void Renderer::init() {
     /* Try load the camera settings */
@@ -38,46 +24,34 @@ void Renderer::init() {
     volume = new BrickVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
 }
 
-/* Source : <https://github.com/tqjxlm/Monte-Carlo-Ray-Tracer> */
-static float3 sample_hemisphere_weighted(const f32 r1, const f32 r2, const float3& n) {
-    f32 theta = acos(sqrt(1.0f - r1));
-    f32 phi = 2.0f * PI * r2;
-    f32 xs = sinf(theta) * cosf(phi);
-    f32 ys = cosf(theta);
-    f32 zs = sinf(theta) * sinf(phi);
-    float3 h = n;
-
-    if ((abs(h.x) <= abs(h.y)) && (abs(h.x) <= abs(h.z))) {
-        h.x = 1.0;
-    } else if ((abs(h.y) <= abs(h.x)) && (abs(h.y) <= abs(h.z))) {
-        h.y = 1.0;
-    } else {
-        h.z = 1.0;
-    }
-
-    float3 x = normalize(cross(h, n));
-    float3 z = normalize(cross(x, n));
-
-    return normalize(xs * x + ys * n + zs * z);
-}
-
-float3 sample_hemisphere_uniform(const float3& n) {
-    float3 R;
-    do {
-        R = float3(RandomFloat() * 2 - 1, RandomFloat() * 2 - 1, RandomFloat() * 2 - 1);
-    } while (dot(R, R) > 1.0f);
-    R = normalize(R);
-    if (dot(n, R) < 0.0f) {
-        return -R;
-    } else {
-        return R;
-    }
-}
-
 u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     HitInfo hit = volume->intersect(ray);
 
     float4 color = float4(0);
+
+#ifdef DEV
+    /* Handle special display modes, for debugging */
+    if (dev::display_mode != dev::DM::FINAL) {
+        if (dev::display_mode != dev::DM::PRIMARY_STEPS) {
+            if (hit.depth >= BIG_F32) return 0xFF101010;
+        }
+
+        float4 dc;
+        switch (dev::display_mode) {
+            case dev::DM::ALBEDO:
+                return RGBF32_to_RGB8(&hit.albedo);
+            case dev::DM::NORMALS:
+                dc = float4(fmaxf(hit.normal, 0.0f), 1.0f);
+                return RGBF32_to_RGB8(&dc);
+            case dev::DM::DEPTH:
+                dc = float4(hit.depth / 16.0f, hit.depth / 16.0f, hit.depth / 16.0f, 1.0f);
+                return RGBF32_to_RGB8(&dc);
+            case dev::DM::PRIMARY_STEPS:
+                dc = float4(hit.steps / 64.0f, hit.steps / 64.0f, hit.steps / 64.0f, 1.0f);
+                return RGBF32_to_RGB8(&dc);
+        }
+    }
+#endif
 
 /* Point & spot lights */
 #if 1
@@ -85,10 +59,6 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     if (hit.depth >= BIG_F32) {
         color = skydome.sample_dir(ray.dir);
         return RGBF32_to_RGB8(&color);
-    }
-
-    if (fast_mode) {
-        return RGBF32_to_RGB8(&hit.albedo);
     }
 
     float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.000001f;
@@ -99,11 +69,10 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     for (u32 i = 0; i < MAX_BOUNCES && hit.albedo.w > 0.0f; ++i) {
         /* Blue noise + R2 (cosine weighted distribution) */
         float3 raw_noise = bnoise.sample_3d(x, y);
-        u32 frame_offset = frame % 128u;
         float3 quasi_noise;
-        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame_offset, 1.0f);
-        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame_offset, 1.0f);
-        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame_offset, 1.0f);
+        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame, 1.0f);
+        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame, 1.0f);
+        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame, 1.0f);
         const float3 jitter = (quasi_noise * hit.albedo.w - (hit.albedo.w * 0.5f));
         const float3 reflect_dir = normalize(reflect(ray.dir, hit.normal) + jitter);
 
@@ -176,11 +145,10 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         const f32 JITTER_RADIUS = JITTER_DIAMETER * 0.5f;
 
         float3 raw_noise = bnoise.sample_3d(x, y);
-        u32 frame_offset = frame % 128u;
         float3 quasi_noise;
-        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame_offset, 1.0f);
-        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame_offset, 1.0f);
-        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame_offset, 1.0f);
+        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame, 1.0f);
+        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame, 1.0f);
+        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame, 1.0f);
         const float3 jitter = (quasi_noise * JITTER_DIAMETER - JITTER_RADIUS);
         const float3 sun_dirj = normalize(sun_dir + jitter);
 
@@ -202,10 +170,9 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     for (const SphereLight& light : area_lights) {
         /* Compute some quasi random noise (for stochastic sampling) */
         const float3 raw_noise = bnoise.sample_3d(x, y);
-        const u32 frame_offset = (frame + noise_n) % 128u;
-        const float3 quasi_noise = make_float3(fmod(raw_noise.x + R2X * (f32)frame_offset, 1.0f),
-                                               fmod(raw_noise.y + R2Y * (f32)frame_offset, 1.0f),
-                                               fmod(raw_noise.z + R2Z * (f32)frame_offset, 1.0f));
+        const float3 quasi_noise = make_float3(fmod(raw_noise.x + R2X * (f32)frame, 1.0f),
+                                               fmod(raw_noise.y + R2Y * (f32)frame, 1.0f),
+                                               fmod(raw_noise.z + R2Z * (f32)frame, 1.0f));
 
         /* Get the contribution for this light */
         color += light.contribution(ray, hit, hit_pos, volume, quasi_noise);
@@ -220,11 +187,10 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         const f32 JITTER_RADIUS = JITTER_DIAMETER * 0.5f;
 
         float3 raw_noise = bnoise.sample_3d(x, y);
-        u32 frame_offset = frame % 128u;
         float3 quasi_noise;
-        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame_offset, 1.0f);
-        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame_offset, 1.0f);
-        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame_offset, 1.0f);
+        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame, 1.0f);
+        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame, 1.0f);
+        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame, 1.0f);
         const float3 light_pos = light.origin + (quasi_noise * JITTER_DIAMETER - JITTER_RADIUS);
 #else
         const float3 light_pos = light.origin;
@@ -276,44 +242,13 @@ void Renderer::tick(f32 dt) {
     if (frame > 100) frame = 0;
     Timer t;
 
-#if 0
-    constexpr i32 TILE_SIZE = 16;
-    /* Split the window into tiles */
-#pragma omp parallel for schedule(dynamic, 1)
-    for (i32 t = 0; t < (WIN_WIDTH * WIN_HEIGHT) / (TILE_SIZE * TILE_SIZE); ++t) {
-        u32 sx = (t / (WIN_HEIGHT / TILE_SIZE)) * TILE_SIZE;
-        u32 sy = (t % (WIN_HEIGHT / TILE_SIZE)) * TILE_SIZE;
-        for (u32 y = 0; y < TILE_SIZE; ++y) {
-            for (u32 x = 0; x < TILE_SIZE; ++x) {
-                Ray ray = camera.get_primary_ray(sx + x, sy + y);
-                u32 color = trace(ray);
-                screen->pixels[(sx + x) + (sy + y) * WIN_WIDTH] = color;
-            }
-        }
-    }
-#elif 0
+#if 1
 #pragma omp parallel for schedule(dynamic)
     for (i32 y = 0; y < WIN_HEIGHT; ++y) {
         for (i32 x = 0; x < WIN_WIDTH; ++x) {
             Ray ray = camera.get_primary_ray(x, y);
             u32 color = trace(ray, x, y);
             screen->pixels[x + y * WIN_WIDTH] = color;
-        }
-    }
-#elif 1
-    constexpr u32 TILE_SIZE = 8;  // 7.7M rays/s
-#pragma omp parallel for schedule(dynamic)
-    for (i32 y = 0; y < WIN_HEIGHT; y += TILE_SIZE) {
-        for (u32 x = 0; x < WIN_WIDTH; x += TILE_SIZE) {
-            for (u32 v = 0; v < TILE_SIZE; ++v) {
-                u32 yv = y + v;
-                for (u32 u = 0; u < TILE_SIZE; ++u) {
-                    u32 xu = x + u;
-                    Ray ray = camera.get_primary_ray(xu, yv);
-                    u32 color = trace(ray, xu, yv);
-                    screen->pixels[xu + yv * WIN_WIDTH] = color;
-                }
-            }
         }
     }
 #else
@@ -346,7 +281,9 @@ void Renderer::tick(f32 dt) {
 #endif
 
     accu_len++;
-    frame_time = t.elapsed();
+#ifdef DEV
+    dev::frame_time = t.elapsed();
+#endif
 
     /* Update the camera */
     if (camera.update(dt)) {
@@ -356,40 +293,19 @@ void Renderer::tick(f32 dt) {
 }
 
 void Renderer::gui(f32 dt) {
-    /* Window position */
-    constexpr float PADDING = 10.0f;
-    ImVec2 work_pos = ImGui::GetMainViewport()->WorkPos;
-    ImGui::SetNextWindowPos(ImVec2(work_pos.x + PADDING, work_pos.y + PADDING), ImGuiCond_Always,
-                            ImVec2(0.0f, 0.0f));
-
-    constexpr ImGuiWindowFlags overlay_flags =
-        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
-        ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
-
-    /* Display performance */
-    ImGui::SetNextWindowBgAlpha(0.35f);
-    if (ImGui::Begin("Stats", nullptr, overlay_flags)) {
-        f32 frame_time_us = frame_time * 1'000'000.0f;
-        f64 win_size = (f64)WIN_WIDTH * WIN_HEIGHT;
-        ImGui::Text("Perf overlay\n");
-        ImGui::Separator();
-        ImGui::Text("FPS: %.1f", 1.0f / dt);
-        ImGui::Separator();
-        ImGui::Text("Ray/s: %.2fM", (win_size / frame_time) / 1'000'000.0);
-        ImGui::Text("Ray time (mean): %.2fns", (frame_time_us / win_size) * 1'000.0);
-        ImGui::Text("Ray time (goal): %.2fns", (0.0166666 / win_size) * 1.0e+9);
-        ImGui::Separator();
-        ImGui::Text("Frame time: %.2fms", frame_time * 1'000.0f);
-    }
-    ImGui::End();
-
+    /* Development GUI */
+    devgui_stats(dt);
     devgui_control();
 
+#ifdef DEV
     /* Fast mode switch */
     static bool f_down = false;
     if (IsKeyDown(GLFW_KEY_F) && f_down == false) {
-        fast_mode = !fast_mode;
+        if (dev::display_mode == dev::DM::FINAL) {
+            dev::display_mode = dev::DM::ALBEDO;
+        } else {
+            dev::display_mode = dev::DM::FINAL;
+        }
         reset_accu();
         f_down = true;
     }
@@ -397,7 +313,6 @@ void Renderer::gui(f32 dt) {
         f_down = false;
     }
 
-#ifdef DEV
     /* Dev gui switch */
     static bool tilde_down = false;
     if (IsKeyDown(GLFW_KEY_GRAVE_ACCENT) && !tilde_down) {

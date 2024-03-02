@@ -108,6 +108,7 @@
     <ClInclude Include="src\graphics\lighting\sphere-light.h" />
     <ClInclude Include="src\dev\gui.h" />
     <ClInclude Include="src\dev\dev.h" />
+    <ClInclude Include="src\graphics\lighting\sample.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template">

@@ -8,6 +8,17 @@ class Renderer;
 namespace dev {
 extern bool hide_devgui;
 extern Renderer* renderer;
+extern f32 frame_time;
+
+enum DisplayMode : int {
+	FINAL,
+	ALBEDO,
+	NORMALS,
+	DEPTH,
+	PRIMARY_STEPS
+};
+typedef DisplayMode DM;
+extern DisplayMode display_mode;
 }  // namespace dev
 
 #endif
