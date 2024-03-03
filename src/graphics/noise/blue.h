@@ -11,21 +11,27 @@ constexpr f32 R2Y_2D = 1.0f / (R2_2D * R2_2D);
 
 /* Blue noise sampler */
 class BlueNoise {
-    vector<f32> sampler;
-    i32 w, h, n;
+    f32* sampler_2d, *sampler_3d;
+    i32 w_2d, w_3d, h_2d, h_3d, n_2d, n_3d;
 
    public:
     BlueNoise();
+    ~BlueNoise();
 
-    float3 sample_3d(u32 x, u32 y) const {
-        x = x % w, y = y % h;
-        u32 i = (x + y * w) * n;
-        return float3(sampler[i + 0], sampler[i + 1], sampler[i + 2]);
-    }
+    BlueNoise(const BlueNoise&) = delete;
+    BlueNoise(BlueNoise&&) = default;
+    BlueNoise& operator=(const BlueNoise&) = delete;
+    BlueNoise& operator=(BlueNoise&&) = default;
 
     float2 sample_2d(u32 x, u32 y) const {
-        x = x % w, y = y % h;
-        u32 i = (x + y * w) * n;
-        return float2(sampler[i + 0], sampler[i + 1]);
+        x = x % w_2d, y = y % h_2d;
+        const u32 i = (x + y * w_2d) * n_2d;
+        return float2(sampler_2d[i + 0], sampler_2d[i + 1]);
+    }
+
+    float3 sample_3d(u32 x, u32 y) const {
+        x = x % w_3d, y = y % h_3d;
+        const u32 i = (x + y * w_3d) * n_3d;
+        return float3(sampler_3d[i + 0], sampler_3d[i + 1], sampler_3d[i + 2]);
     }
 };

@@ -40,7 +40,7 @@ class Renderer : public TheApp {
     vector<LightSource> lights;
     vector<SphereLight> area_lights;
 
-    BlueNoise bnoise;
+    BlueNoise* bnoise = nullptr;
     SkyDome skydome;
 
     /* Accumulator */

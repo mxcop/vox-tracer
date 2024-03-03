@@ -16,7 +16,7 @@ void Renderer::init() {
     accu = (float4*)MALLOC64(WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
     if (accu) memset(accu, 0, WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
 
-    bnoise = BlueNoise();
+    bnoise = new BlueNoise();
     skydome = SkyDome("assets/skydome.hdr");
 
     /* Create a voxel volume */
@@ -28,6 +28,35 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     HitInfo hit = volume->intersect(ray);
 
     float4 color = float4(0);
+    float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.000001f;
+
+    /* Reflections */
+#if 1
+    constexpr u32 MAX_BOUNCES = 8;
+    for (u32 i = 0; i < MAX_BOUNCES && hit.albedo.w > 0.0f; ++i) {
+        /* Blue noise + R2 (cosine weighted distribution) */
+        float3 raw_noise = bnoise->sample_3d(x, y);
+        float3 quasi_noise;
+        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame, 1.0f);
+        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame, 1.0f);
+        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame, 1.0f);
+        const float3 jitter = (quasi_noise * hit.albedo.w - (hit.albedo.w * 0.5f));
+        const float3 reflect_dir = normalize(reflect(ray.dir, hit.normal) + jitter);
+
+        ray = Ray(hit_pos, reflect_dir);
+        const u32 steps = hit.steps;
+        hit = volume->intersect(ray);
+        hit.steps += steps; /* <- carry step count */
+
+        /* Break if the ray missed */
+        if (hit.depth >= BIG_F32) {
+            break;
+        }
+
+        /* Update the intersection point */
+        hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.000001f;
+    }
+#endif
 
 #ifdef DEV
     /* Handle special display modes, for debugging */
@@ -58,42 +87,13 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     /* Skybox color if the ray missed */
     if (hit.depth >= BIG_F32) {
         color = skydome.sample_dir(ray.dir);
+
+        /* Update accumulator */
+        accu[x + y * WIN_WIDTH] += aces_approx(color);
+        color = accu[x + y * WIN_WIDTH] / (f32)accu_len;
+
         return RGBF32_to_RGB8(&color);
     }
-
-    float3 hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.000001f;
-
-    /* Reflections */
-#if 1
-    constexpr u32 MAX_BOUNCES = 8;
-    for (u32 i = 0; i < MAX_BOUNCES && hit.albedo.w > 0.0f; ++i) {
-        /* Blue noise + R2 (cosine weighted distribution) */
-        float3 raw_noise = bnoise.sample_3d(x, y);
-        float3 quasi_noise;
-        quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame, 1.0f);
-        quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame, 1.0f);
-        quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)frame, 1.0f);
-        const float3 jitter = (quasi_noise * hit.albedo.w - (hit.albedo.w * 0.5f));
-        const float3 reflect_dir = normalize(reflect(ray.dir, hit.normal) + jitter);
-
-        ray = Ray(hit_pos, reflect_dir);
-        hit = volume->intersect(ray);
-
-        /* Skybox color if the ray missed */
-        if (hit.depth >= BIG_F32) {
-            color = skydome.sample_dir(ray.dir);
-
-            /* Update accumulator */
-            accu[x + y * WIN_WIDTH] += aces_approx(color);
-            color = accu[x + y * WIN_WIDTH] / (f32)accu_len;
-
-            return RGBF32_to_RGB8(&color);
-        }
-
-        /* Update the intersection point */
-        hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.000001f;
-    }
-#endif
 
     const float3 hit_color = float3(hit.albedo);
 
@@ -105,30 +105,19 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     float3 ambient_c = float3(0.0f);
     constexpr f32 SAMPLES = 1;
     for (u32 i = 0; i < SAMPLES; i++) {
-        /* Generate a random direction */
-#if CONSINE_SAMPLING
         /* Blue noise + R2 (cosine weighted distribution) */
-        const float2 raw_noise = bnoise.sample_2d(x, y);
+        const float2 raw_noise = bnoise->sample_2d(x, y);
         const f32 quasi_x = fmod(raw_noise.x + R2X_2D * (f32)(frame + i), 1.0f);
         const f32 quasi_y = fmod(raw_noise.y + R2Y_2D * (f32)(frame + i), 1.0f);
         const float3 ambient_dir = sample_hemisphere_weighted(quasi_x, quasi_y, hit.normal);
-#else
-        /* Blue noise + R2 (uniform distribution) */
-        // float3 raw_noise = bnoise.sample_3d(x, y);
-        // float3 quasi_noise;
-        // quasi_noise.x = fmod(raw_noise.x + R2X * (f32)(frame + i), 1.0f);
-        // quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)(frame + i), 1.0f);
-        // quasi_noise.z = fmod(raw_noise.z + R2Z * (f32)(frame + i), 1.0f);
-        // float3 ambient_dir = normalize(quasi_noise);
-        float3 ambient_dir = sample_hemisphere_uniform(hit.normal);
-#endif
+
         /* Shoot the ambient ray */
-        const Ray ambient_ray = Ray(hit_pos + ambient_dir * 32.0f, -ambient_dir * 32.0f);
+        const Ray ambient_ray = Ray(hit_pos + ambient_dir * 8.0f, -ambient_dir * 8.0f);
         const bool in_shadow = volume->is_occluded(ambient_ray);
 
         if (not in_shadow) {
+            /* Adjust the samples based on their probability distribution function (PDF) */
             const f32 pdf = dot(ambient_dir, hit.normal) * INVPI;
-            /* Multiply by 2 Pi because the area we're integrating is 2 Pi */
             const float3 sample = skydome.sample_dir(ambient_dir);
             ambient_c += (sample / pdf);
         }
@@ -144,7 +133,7 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         const f32 JITTER_DIAMETER = 6.0f / 16.0f;
         const f32 JITTER_RADIUS = JITTER_DIAMETER * 0.5f;
 
-        float3 raw_noise = bnoise.sample_3d(x, y);
+        float3 raw_noise = bnoise->sample_3d(x, y);
         float3 quasi_noise;
         quasi_noise.x = fmod(raw_noise.x + R2X * (f32)frame, 1.0f);
         quasi_noise.y = fmod(raw_noise.y + R2Y * (f32)frame, 1.0f);
@@ -169,7 +158,7 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     u32 noise_n = 0;
     for (const SphereLight& light : area_lights) {
         /* Compute some quasi random noise (for stochastic sampling) */
-        const float3 raw_noise = bnoise.sample_3d(x, y);
+        const float3 raw_noise = bnoise->sample_3d(x, y);
         const float3 quasi_noise = make_float3(fmod(raw_noise.x + R2X * (f32)frame, 1.0f),
                                                fmod(raw_noise.y + R2Y * (f32)frame, 1.0f),
                                                fmod(raw_noise.z + R2Z * (f32)frame, 1.0f));
@@ -330,6 +319,9 @@ void Renderer::shutdown() {
     FILE* f = fopen("camera.bin", "wb");
     fwrite(&camera, 1, sizeof(Camera), f);
     fclose(f);
+
+    delete volume;
+    delete bnoise;
 }
 
 void Renderer::MouseDown(int button) {
