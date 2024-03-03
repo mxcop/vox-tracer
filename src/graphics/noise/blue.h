@@ -9,6 +9,7 @@ constexpr f32 R2_2D = 1.32471795724474602596f;
 constexpr f32 R2X_2D = 1.0f / R2_2D;
 constexpr f32 R2Y_2D = 1.0f / (R2_2D * R2_2D);
 
+/* Textures obtained from : <http://momentsingraphics.de/BlueNoise.html> */
 /* Blue noise sampler */
 class BlueNoise {
     f32* sampler_2d, *sampler_3d;

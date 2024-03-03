@@ -25,8 +25,11 @@ float4 SphereLight::contribution(const Ray& pray, const HitInfo& phit, const flo
     const bool occluded = scene->is_occluded(shadow_ray);
     if (occluded) return float4(0);
 
+    /* Adjust the samples based on their probability distribution function (PDF) */
+    const f32 pdf = FOURPI * diameter; /* (4PI * r2) */
+
     /* Finally calculate the contribution */
     const f32 i = intensity(dist_sqr);
-    const float4 sample = color * i * (FOURPI * diameter) * incidence;
+    const float4 sample = color * i * incidence * pdf;
     return phit.albedo * sample;
 }

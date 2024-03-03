@@ -108,7 +108,7 @@ class BrickVolume {
     /**
      * @brief Intersect and return true if the ray hit anything.
      */
-    bool is_occluded(const Ray& ray) const;
+    bool is_occluded(const Ray& ray, u32* steps = nullptr) const;
 
     /**
      * @brief Place a voxel into the volume where the ray intersects.

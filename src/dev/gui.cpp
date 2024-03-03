@@ -52,7 +52,8 @@ void devgui_control() {
 
     if (ImGui::Begin("Control")) {
         /* Change what part of the render process is displayed */
-        const char* modes[] = {"Final", "Albedo", "Normals", "Depth", "Primary Steps"};
+        const char* modes[] = {"Final",         "Albedo",          "Normals", "Depth",
+                               "Primary Steps", "Secondary Steps", "Ambient Steps"};
         if (ImGui::Combo("Display Mode", (i32*)&dev::display_mode, modes, IM_ARRAYSIZE(modes))) {
             dev::renderer->reset_accu();
         }

@@ -82,8 +82,6 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     }
 #endif
 
-/* Point & spot lights */
-#if 1
     /* Skybox color if the ray missed */
     if (hit.depth >= BIG_F32) {
         color = skydome.sample_dir(ray.dir);
@@ -100,24 +98,30 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     /* Ambient light */
 #if 1
 
-#define CONSINE_SAMPLING 1
-
+#ifdef DEV
+    u32 al_steps = 0;
+#endif
     float3 ambient_c = float3(0.0f);
     constexpr f32 SAMPLES = 1;
     for (u32 i = 0; i < SAMPLES; i++) {
         /* Blue noise + R2 (cosine weighted distribution) */
         const float2 raw_noise = bnoise->sample_2d(x, y);
-        const f32 quasi_x = fmod(raw_noise.x + R2X_2D * (f32)(frame + i), 1.0f);
-        const f32 quasi_y = fmod(raw_noise.y + R2Y_2D * (f32)(frame + i), 1.0f);
-        const float3 ambient_dir = sample_hemisphere_weighted(quasi_x, quasi_y, hit.normal);
+        const f32 quasi_x = fmod(raw_noise.x + R2X_2D * (frame + i), 1.0f);
+        const f32 quasi_y = fmod(raw_noise.y + R2Y_2D * (frame + i), 1.0f);
+        // const float3 ambient_dir = sample_hemisphere_weighted(quasi_x, quasi_y, hit.normal);
+        const float3 ambient_dir = cosineweighteddiffusereflection(hit.normal, quasi_x, quasi_y);
 
         /* Shoot the ambient ray */
         const Ray ambient_ray = Ray(hit_pos + ambient_dir * 8.0f, -ambient_dir * 8.0f);
+#ifdef DEV
+        const bool in_shadow = volume->is_occluded(ambient_ray, &al_steps);
+#else
         const bool in_shadow = volume->is_occluded(ambient_ray);
+#endif
 
         if (not in_shadow) {
             /* Adjust the samples based on their probability distribution function (PDF) */
-            const f32 pdf = dot(ambient_dir, hit.normal) * INVPI;
+            const f32 pdf = dot(ambient_dir, hit.normal) * INVPI; /* (cos(a) / PI) */
             const float3 sample = skydome.sample_dir(ambient_dir);
             ambient_c += (sample / pdf);
         }
@@ -125,9 +129,26 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
     /* Divide by the number of samples */
     color += hit_color * (ambient_c * (1.0f / SAMPLES));
 
+#ifdef DEV
+    /* Handle special display modes, for debugging */
+    if (dev::display_mode == dev::DM::AMBIENT_STEPS) {
+        float4 dc;
+        dc = float4(al_steps / 64.0f, al_steps / 64.0f, al_steps / 64.0f, 1.0f);
+
+        /* Update accumulator */
+        accu[x + y * WIN_WIDTH] += dc;
+        dc = accu[x + y * WIN_WIDTH] / (f32)accu_len;
+
+        return RGBF32_to_RGB8(&dc);
+    }
+#endif
+
 #endif
 
     /* Directional light */
+#ifdef DEV
+    u32 dl_steps = 0;
+#endif
     for (u32 i = 0; i < 1; i++) {
         /* Jitter light position (soft shadows) */
         const f32 JITTER_DIAMETER = 6.0f / 16.0f;
@@ -147,13 +168,31 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
 
         /* Shoot shadow ray */
         const Ray shadow_ray = Ray(hit_pos + sun_dirj * 32.0f, -sun_dirj * 32.0f);
+#ifdef DEV
+        const bool in_shadow = volume->is_occluded(shadow_ray, &dl_steps);
+#else
         const bool in_shadow = volume->is_occluded(shadow_ray);
+#endif
 
         if (not in_shadow) {
             const float3 sun_light = float3(2.5f, 2.5f, 2.5f);
             color += hit_color * sun_light * incidence;
         }
     }
+
+#ifdef DEV
+    /* Handle special display modes, for debugging */
+    if (dev::display_mode == dev::DM::SECONDARY_STEPS) {
+        float4 dc;
+        dc = float4(dl_steps / 64.0f, dl_steps / 64.0f, dl_steps / 64.0f, 1.0f);
+
+        /* Update accumulator */
+        accu[x + y * WIN_WIDTH] += dc;
+        dc = accu[x + y * WIN_WIDTH] / (f32)accu_len;
+
+        return RGBF32_to_RGB8(&dc);
+    }
+#endif
 
     u32 noise_n = 0;
     for (const SphereLight& light : area_lights) {
@@ -211,13 +250,6 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         color += hit_color * area_c * incidence / sqd;
     }
 #endif
-#else
-    // color = float4((hit.normal + 1.0f) * 0.5f, 1.0f);
-    color = float4(hit.depth / 8.0f, hit.depth / 8.0f, hit.depth / 8.0f, 1.0f);
-    // color = float4(hit.albedo, 1.0f);
-    // color = float4(hit.steps / 64.0f, hit.steps / 64.0f, hit.steps / 64.0f, 1.0f);
-    return RGBF32_to_RGB8(&color);
-#endif
 
     /* Update accumulator */
     accu[x + y * WIN_WIDTH] += aces_approx(color);
@@ -228,7 +260,7 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
 
 void Renderer::tick(f32 dt) {
     frame++;
-    if (frame > 100) frame = 0;
+    if (frame > 120) frame = 0;
     Timer t;
 
 #if 1

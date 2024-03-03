@@ -245,7 +245,7 @@ HitInfo BrickVolume::intersect(const Ray& ray) const {
     return hit;
 }
 
-bool BrickVolume::is_occluded(const Ray& ray) const {
+bool BrickVolume::is_occluded(const Ray& ray, u32* steps) const {
     /* Exit if the ray misses the volume */
     f32 tmin, tmax;
     intersect_bb(ray, tmin, tmax);
@@ -268,7 +268,13 @@ bool BrickVolume::is_occluded(const Ray& ray) const {
 
     f32 t = 0.0f;
     const f32 rbpu = 1.0f / bpu;
-    for (u32 i = 0; i < MAX_STEPS; ++i) {
+#ifdef DEV
+    u32 j = 0;
+    u32& i = steps ? *steps : j;
+#else
+    u32 i = 0;
+#endif
+    for (; i < MAX_STEPS; ++i) {
         /* Fetch the active cell */
         const Brick512* brick = get_brick(cell);
         if (brick->popcnt > 0) {
@@ -307,14 +313,11 @@ bool BrickVolume::is_occluded(const Ray& ray) const {
         }
 
         if (tmin + t * rbpu >= tmax) break;
-        // if ((tmin + t / (vpu * 0.125f)) > tmax) break;
     }
 
     /* No hit occured! */
     return false;
 }
-
-// #define FIXED_DIST
 
 bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const Ray& ray,
                                  const f32 entry_t, const f32 tmax) const {
@@ -322,7 +325,6 @@ bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const R
     const float3 bmin = bbmin + float3(pos) / bpu;
     /* Brick entry position */
     const float3 entry = ((ray.origin + ray.dir * entry_t) - bmin) * vpu;
-#ifndef FIXED_DIST
     /* Clamp the entry point inside the volume grid */
     int3 cell = clamp(floori(entry), 0, 8 - 1);
 
@@ -332,11 +334,6 @@ bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const R
     const float3 delta = fabs(ray.r_dir);
     /* Determine t at which the ray crosses the first voxel boundary */
     float3 side = ((float3(cell) - entry) + fmaxf(step, float3(0))) * ray.r_dir;
-#else
-    const f32 dirlen = length(ray.dir);
-    const float3 ndir = ray.dir / dirlen;
-    float3 cell = entry;
-#endif
 
     f32 t = 0.0f;
     const f32 rvpu = 1.0f / vpu;
@@ -347,7 +344,6 @@ bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const R
             return true;
         }
 
-#ifndef FIXED_DIST
         /* Amanatides & Woo */
         /* <http://www.cse.yorku.ca/~amana/research/grid.pdf> */
         if (side.x < side.y) {
@@ -375,14 +371,6 @@ bool BrickVolume::traverse_brick(const Brick512* brick, const int3& pos, const R
                 side.z += delta.z;
             }
         }
-#else
-        /* Fixed step algorithm */
-        cell += ndir * 0.5f;
-        t += 0.5f;
-        if (cell.x < 0 || cell.x >= 8) break;
-        if (cell.y < 0 || cell.y >= 8) break;
-        if (cell.z < 0 || cell.z >= 8) break;
-#endif
 
         if (entry_t + t * rvpu >= tmax) break;
     }

@@ -15,7 +15,9 @@ enum DisplayMode : int {
 	ALBEDO,
 	NORMALS,
 	DEPTH,
-	PRIMARY_STEPS
+	PRIMARY_STEPS,
+	SECONDARY_STEPS,
+	AMBIENT_STEPS
 };
 typedef DisplayMode DM;
 extern DisplayMode display_mode;
