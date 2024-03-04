@@ -12,10 +12,10 @@ constexpr f32 DEFAULT_VOXEL_SCALE = 16.0f;
 #define USE_AVX2_GATHER 1
 
 #define USE_BRICKMAP 1
-constexpr u32 BRICK_LEVELS = 3;
-constexpr f32 BRICK_LEVEL_MUL[BRICK_LEVELS] = {2.0f, 2.0f, 2.0f};
-constexpr f32 BRICK_LEVEL_REC[BRICK_LEVELS] = {0.5f, 0.5f, 0.5f};
-constexpr u32 MAX_LEVEL_SIZE = 8;  // 1u << BRICK_LEVELS;
+constexpr u32 BRICK_LEVELS = 4;
+constexpr f32 BRICK_LEVEL_MUL[BRICK_LEVELS] = {2.0f, 2.0f, 2.0f, 2.0f};
+constexpr f32 BRICK_LEVEL_REC[BRICK_LEVELS] = {0.5f, 0.5f, 0.5f, 0.5f};
+constexpr u32 MAX_LEVEL_SIZE = 16;  // 1u << BRICK_LEVELS;
 // constexpr u32 BRICK_SIZE = 8;
 // constexpr f32 R_BRICK_SIZE = 1.0f / BRICK_SIZE;
 
@@ -51,7 +51,7 @@ struct VoxelVolume {
         for (u32 i = 0; i < BRICK_LEVELS + 1; i++) {
             delete[] voxels[i];
         }
-        delete[] voxels;
+        // delete[] voxels;
     }
 
     VoxelVolume(const VoxelVolume&) = delete;
@@ -107,6 +107,8 @@ struct VoxelVolume {
             for (u32 z = 0; z < bsize.z; z += bmul) {
                 for (u32 y = 0; y < bsize.y; y += bmul) {
                     for (u32 x = 0; x < bsize.x; x += bmul) {
+                        voxels[b + 1][morton_encode(x * BRICK_LEVEL_REC[b], y * BRICK_LEVEL_REC[b],
+                                                    z * BRICK_LEVEL_REC[b])] = 0;
 #if USE_MORTON
                         for (u32 bz = 0; bz < bmul; bz++) {
                             for (u32 by = 0; by < bmul; by++) {
@@ -249,7 +251,7 @@ struct VoxelVolume {
      * @brief Intersect the voxel volume with a ray.
      */
     HitInfo intersect(const Ray& ray) const;
-    bool is_occluded(const Ray& ray) const;
+    bool is_occluded(const Ray& ray, u32* steps = nullptr) const;
 
     /**
      * @brief Intersect the voxel volume with a packet of 4 rays.

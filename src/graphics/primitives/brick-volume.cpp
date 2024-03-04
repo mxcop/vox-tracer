@@ -55,7 +55,7 @@ BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
                                                       offset.y + (by * 8 + y) * 0.01f,
                                                       offset.z + (bz * 8 + z) * 0.01f);
 
-                            if (noise > 0.07f) {
+                            if (noise > 0.03f) {
                                 if (not brick->packets) {
                                     brick->packets = (u8*)MALLOC64(64);
                                     brick->voxels = new u32[8 * 8 * 8];
@@ -70,7 +70,7 @@ BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
 
                                 const u32 i = (z * 8 * 8) + (y * 8) + x;
                                 // const u32 i = morton_encode(x, y, z);
-                                if (noise_up < 0.07f) {
+                                if (noise_up < 0.03f) {
                                     /* Grass */
                                     const f32 noise_c =
                                         pow((noise3D(offset.x + (bx * 8 + x) * 0.2f,

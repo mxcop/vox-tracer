@@ -71,25 +71,25 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
             lod_ptr = voxels[level];
 
             pos =
-                clamp(floorf((p0 + (t) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+                clamp(floorf((p0 + (t - 0.0001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
             side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
             continue;
         }
 
         /* (try) move up one level after 12 steps */
-        if (j++ >= 12 && level < BRICK_LEVELS) {
-            level++, j = 0;
+        //if (j++ >= 12 && level < BRICK_LEVELS) {
+        //    level++, j = 0;
 
-            /* Move up one level */
-            lod *= BRICK_LEVEL_MUL[level - 1], rlod *= BRICK_LEVEL_REC[level - 1];
-            step *= BRICK_LEVEL_MUL[level - 1], delta *= BRICK_LEVEL_MUL[level - 1];
-            lod_ptr = voxels[level];
+        //    /* Move up one level */
+        //    lod *= BRICK_LEVEL_MUL[level - 1], rlod *= BRICK_LEVEL_REC[level - 1];
+        //    step *= BRICK_LEVEL_MUL[level - 1], delta *= BRICK_LEVEL_MUL[level - 1];
+        //    lod_ptr = voxels[level];
 
-            pos =
-                clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
-            side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
-            continue;
-        }
+        //    pos =
+        //        clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+        //    side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
+        //    continue;
+        //}
 
         /* Move to the next voxel */
         if (side.x < side.y) {
@@ -215,7 +215,7 @@ HitInfo VoxelVolume::intersect(const Ray& ray) const {
 
 #if USE_BRICKMAP
 
-bool VoxelVolume::is_occluded(const Ray& ray) const {
+bool VoxelVolume::is_occluded(const Ray& ray, u32* steps) const {
     /* Early return if bounding box was not hit */
     f32 tmin, tmax;
     ray_vs_aabb(ray, tmin, tmax);
@@ -250,7 +250,13 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
     /* Start traversing */
     float3 normal = {};
     f32 t = 0.0f;
-    for (u32 i = 0, j = 0; i < MAX_STEPS; ++i) {
+#ifdef DEV
+    u32 j = 0;
+    u32& i = steps ? *steps : j;
+#else
+    u32 i = 0;
+#endif
+    for (i, j = 0; i < MAX_STEPS; ++i) {
         const u8* voxel = fetch_voxel(floori(pos * rlod), lod_ptr);
 
         if (*voxel) {
@@ -266,25 +272,25 @@ bool VoxelVolume::is_occluded(const Ray& ray) const {
             lod_ptr = voxels[level];
 
             pos =
-                clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+                clamp(floorf((p0 + (t - 0.0001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
             side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
             continue;
         }
 
         /* (try) move up one level after 12 steps */
-        if (j++ >= 12 && level < BRICK_LEVELS) {
-            level++, j = 0;
+        //if (j++ >= 12 && level < BRICK_LEVELS) {
+        //    level++, j = 0;
 
-            /* Move up one level */
-            lod *= BRICK_LEVEL_MUL[level - 1], rlod *= BRICK_LEVEL_REC[level - 1];
-            step *= BRICK_LEVEL_MUL[level - 1], delta *= BRICK_LEVEL_MUL[level - 1];
-            lod_ptr = voxels[level];
+        //    /* Move up one level */
+        //    lod *= BRICK_LEVEL_MUL[level - 1], rlod *= BRICK_LEVEL_REC[level - 1];
+        //    step *= BRICK_LEVEL_MUL[level - 1], delta *= BRICK_LEVEL_MUL[level - 1];
+        //    lod_ptr = voxels[level];
 
-            pos =
-                clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
-            side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
-            continue;
-        }
+        //    pos =
+        //        clamp(floorf((p0 + (t + 0.001f) * extend) * rlod) * lod, float3(0), volume - 1.0f);
+        //    side = (pos + fmaxf(step, float3(0.0f)) - p0) * inv_extend;
+        //    continue;
+        //}
 
         /* Move to the next voxel */
         if (side.x < side.y) {

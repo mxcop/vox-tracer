@@ -45,5 +45,8 @@ class SphereLight {
     SphereLight() = delete;
     SphereLight(const float3 origin, const f32 radius, const float3 color, const f32 power);
 
-    float4 contribution(const Ray& pray, const HitInfo& phit, const float3& surface, const BrickVolume* scene, const float3& noise) const;
+    float4 contribution(const Ray& pray, const HitInfo& phit, const float3& surface,
+                        const BrickVolume* scene, const float3& noise) const;
+    float4 contribution(const Ray& pray, const HitInfo& phit, const float3& surface,
+                        const VoxelVolume* scene, const float3& noise) const;
 };
