@@ -46,7 +46,7 @@ class BrickVolume {
 
         Brick512() = default;
         ~Brick512() {
-            if (packets) delete[] packets;
+            if (packets) FREE64(packets);
             if (voxels) delete[] voxels;
         }
         Brick512(const Brick512&) = delete;

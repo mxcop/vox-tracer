@@ -39,6 +39,7 @@ class Renderer : public TheApp {
     Camera camera;
     vector<LightSource> lights;
     vector<SphereLight> area_lights;
+    Surface* texture = nullptr;
 
     BlueNoise* bnoise = nullptr;
     SkyDome skydome;

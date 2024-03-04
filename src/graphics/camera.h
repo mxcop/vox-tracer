@@ -67,21 +67,21 @@ struct Camera {
     /* Get a new primary ray packet from a top left X and Y pixel coordinate. */
     inline RayPacket get_primary_packet(const f32 x, const f32 y) const {
         /* UV coordinates */
-        //const f128 xm = _mm_set_ps(x, x + 1, x, x + 1), ym = _mm_set_ps(y, y, y + 1, y + 1);
-        //const f128 um = _mm_mul_ps(xm, _mm_set_ps1(1.0f / WIN_WIDTH));
-        //const f128 vm = _mm_mul_ps(ym, _mm_set_ps1(1.0f / WIN_HEIGHT));
-        
+        // const f128 xm = _mm_set_ps(x, x + 1, x, x + 1), ym = _mm_set_ps(y, y, y + 1, y + 1);
+        // const f128 um = _mm_mul_ps(xm, _mm_set_ps1(1.0f / WIN_WIDTH));
+        // const f128 vm = _mm_mul_ps(ym, _mm_set_ps1(1.0f / WIN_HEIGHT));
+
         /* Bundle of 4 x 3D vectors */
         QuadBundle bundle = {};
         bundle.v1 = get_primary_ray(x, y).dir;
         bundle.v2 = get_primary_ray(x + 1, y).dir;
         bundle.v3 = get_primary_ray(x, y + 1).dir;
         bundle.v4 = get_primary_ray(x + 1, y + 1).dir;
-        //bundle.v1 = (tl + um.m128_f32[0] * (tr - tl) + vm.m128_f32[0] * (bl - tl)) - pos;
-        //bundle.v2 = (tl + um.m128_f32[1] * (tr - tl) + vm.m128_f32[1] * (bl - tl)) - pos;
-        //bundle.v3 = (tl + um.m128_f32[2] * (tr - tl) + vm.m128_f32[2] * (bl - tl)) - pos;
-        //bundle.v4 = (tl + um.m128_f32[3] * (tr - tl) + vm.m128_f32[3] * (bl - tl)) - pos;
-        // normalize_bundle(bundle); /* Fast SIMD normalize */
+        // bundle.v1 = (tl + um.m128_f32[0] * (tr - tl) + vm.m128_f32[0] * (bl - tl)) - pos;
+        // bundle.v2 = (tl + um.m128_f32[1] * (tr - tl) + vm.m128_f32[1] * (bl - tl)) - pos;
+        // bundle.v3 = (tl + um.m128_f32[2] * (tr - tl) + vm.m128_f32[2] * (bl - tl)) - pos;
+        // bundle.v4 = (tl + um.m128_f32[3] * (tr - tl) + vm.m128_f32[3] * (bl - tl)) - pos;
+        //  normalize_bundle(bundle); /* Fast SIMD normalize */
 
         f128 rd[3] = {}; /* Convert from horizontal to vertical layout */
         rd[0] = _mm_set_ps(bundle.v4.x, bundle.v3.x, bundle.v2.x, bundle.v1.x);
@@ -96,4 +96,7 @@ struct Camera {
 
     /* Update the camera and handle inputs. */
     bool update(const f32 t);
+
+   private:
+    f32 focal_point = 0.01f;
 };

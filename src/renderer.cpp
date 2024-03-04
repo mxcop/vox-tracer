@@ -17,11 +17,13 @@ void Renderer::init() {
     if (accu) memset(accu, 0, WIN_WIDTH * WIN_HEIGHT * sizeof(float4));
 
     bnoise = new BlueNoise();
-    skydome = SkyDome("assets/skydome.hdr");
+    skydome = SkyDome("assets/kiara_1_dawn_8k.hdr");
 
     /* Create a voxel volume */
     // volume = new VoxelVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
     volume = new BrickVolume(float3(0.0f, 0.0f, 0.0f), int3(128, 128, 128));
+
+    // texture = new Surface("assets/very-serious-test-image.png");
 }
 
 u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
@@ -56,6 +58,30 @@ u32 Renderer::trace(Ray& ray, const u32 x, const u32 y) const {
         /* Update the intersection point */
         hit_pos = ray.origin + ray.dir * hit.depth + hit.normal * 0.000001f;
     }
+#endif
+
+#if 0
+    /* Textures */
+    f32 u, v;
+
+    const float3 p = hit_pos / 8.0f;
+    if (hit.normal.x) {
+        u = p.y - floorf(p.y);
+        v = p.z - floorf(p.z);
+    } else if (hit.normal.y) {
+        u = p.x - floorf(p.x);
+        v = p.z - floorf(p.z);
+    } else {
+        u = p.x - floorf(p.x);
+        v = p.y - floorf(p.y);
+    }
+
+    u *= 128, v *= 128;
+
+    int iu = (int)(u * texture->width) % texture->width;
+    int iv = (int)(v * texture->height) % texture->height;
+    uint texel = texture->pixels[iu + iv * texture->width];
+    hit.albedo = RGB8_to_RGBF32(texel);
 #endif
 
 #ifdef DEV

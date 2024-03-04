@@ -31,11 +31,17 @@ void devgui_stats(const f32 dt) {
     if (ImGui::Begin("Stats", nullptr, overlay_flags)) {
         f32 frame_time_us = dev::frame_time * 1'000'000.0f;
         f64 win_size = (f64)WIN_WIDTH * WIN_HEIGHT;
+
+        static f32 avg = 10, alpha = 1;
+        avg = (1 - alpha) * avg + alpha * dev::frame_time * 1000;
+        if (alpha > 0.05f) alpha *= 0.5f;
+        f32 fps = 1000.0f / avg, rps = (WIN_WIDTH * WIN_HEIGHT) / avg;
+
         ImGui::Text("Perf overlay\n");
         ImGui::Separator();
-        ImGui::Text("FPS: %.1f", 1.0f / dt);
+        ImGui::Text("FPS: %.1f", fps);
         ImGui::Separator();
-        ImGui::Text("Ray/s: %.2fM", (win_size / dev::frame_time) / 1'000'000.0);
+        ImGui::Text("Ray/s: %.2fM", rps / 1000);
         ImGui::Text("Ray time (mean): %.2fns", (frame_time_us / win_size) * 1'000.0);
         ImGui::Text("Ray time (goal): %.2fns", (0.0166666 / win_size) * 1.0e+9);
         ImGui::Separator();

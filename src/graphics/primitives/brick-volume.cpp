@@ -57,7 +57,7 @@ BrickVolume::BrickVolume(const float3 pos, const int3 size, const f32 vpu)
 
                             if (noise > 0.07f) {
                                 if (not brick->packets) {
-                                    brick->packets = new u8[64];
+                                    brick->packets = (u8*)MALLOC64(64);
                                     brick->voxels = new u32[8 * 8 * 8];
                                     memset(brick->packets, 0x00, 64);
                                     memset(brick->voxels, 0x00, sizeof(u32) * 8 * 8 * 8);
@@ -456,7 +456,7 @@ void BrickVolume::place_voxel(const Ray& ray) {
 
     Brick512* brick = get_brick(hit_brick);
     if (brick->packets == nullptr) {
-        brick->packets = new u8[64];
+        brick->packets = (u8*)MALLOC64(64);
         brick->voxels = new u32[8 * 8 * 8];
         memset(brick->packets, 0x00, 64);
         memset(brick->voxels, 0x00, sizeof(u32) * 8 * 8 * 8);
